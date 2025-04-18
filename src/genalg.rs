@@ -1,4 +1,3 @@
-use core::num;
 use std::error::Error;
 
 use crate::individual::genetic::Genetic;
@@ -12,7 +11,14 @@ impl<T: Genetic + Clone> GenAlg<T> {
     pub fn run_genetic_algorithm(
         &mut self,
         num_of_generations: usize,
+        selection_rate: f32,
+        mutatation_rate: f32,
+        elite_count: usize
     ) -> Result<Vec<T>, Box<dyn Error>> {
+
+        if elite_count > self.current_population.len() {
+            panic!("Number of elite individuals can't be higher than total number of individuals in a generation");
+        }
 
         for _ in 0..num_of_generations {
             //
@@ -64,20 +70,28 @@ mod tests {
         fn fitness(&self) -> f32 {
             todo!();
         }
+        
+        fn crossover(&self, other: Self) -> Self {
+            todo!()
+        }
+        
+        fn mutate(&self) -> () {
+            todo!()
+        }
 
     }
 
+    const POP_SIZE: usize = 20;
+    const NUM_GENS: usize = 10;
 
     #[test]
     fn test_gen_alg_creation() {
-        let population_size = 20;
-
-        let gen_alg = GenAlg::<DummyGenetic>::new(population_size, None);
+        let gen_alg = GenAlg::<DummyGenetic>::new(POP_SIZE, None);
         let gen_vec = &gen_alg.current_population;
 
         println!("{:?}", gen_vec);
 
-        assert_eq!(gen_alg.current_population.len(), population_size);
+        assert_eq!(gen_alg.current_population.len(), POP_SIZE);
         assert!(
             gen_vec.iter().all(|individual| (0..MAX_RAND).contains(&individual.value)),
             "One or more values are out of range!"
@@ -89,15 +103,14 @@ mod tests {
 
     #[test]
     fn test_gen_alg_creation_init_pop() {
-        let population_size = 20;
-        let init_pop: Vec<DummyGenetic> = (0..population_size).map(|_| DummyGenetic::generate()).collect();
+        let init_pop: Vec<DummyGenetic> = (0..POP_SIZE).map(|_| DummyGenetic::generate()).collect();
 
-        let gen_alg = GenAlg::<DummyGenetic>::new(population_size, Some(&init_pop));
+        let gen_alg = GenAlg::<DummyGenetic>::new(POP_SIZE, Some(&init_pop));
         let gen_vec = &gen_alg.current_population;
 
         println!("{:?}", gen_vec);
 
-        assert_eq!(gen_alg.current_population.len(), population_size);
+        assert_eq!(gen_alg.current_population.len(), POP_SIZE);
         assert!(
             gen_vec.iter().all(|individual| (0..MAX_RAND).contains(&individual.value)),
             "One or more values are out of range!"
@@ -109,18 +122,15 @@ mod tests {
 
     #[test]
     fn test_run_genetic_algorithm() {
-        let population_size = 20;
-        let num_of_gens = 10;
-
-        let mut gen_alg = GenAlg::<DummyGenetic>::new(population_size, None);
-        let result = gen_alg.run_genetic_algorithm(num_of_gens).unwrap();
+        let mut gen_alg = GenAlg::<DummyGenetic>::new(POP_SIZE, None);
+        let result = gen_alg.run_genetic_algorithm(NUM_GENS, 0.1, 0.1, 0).unwrap();
         let gen_vec = &gen_alg.current_population;
 
         println!("{:?}", gen_vec);
         println!("{:?}", result);
 
-        assert_eq!(result.len(), population_size);
-        assert_eq!(gen_alg.current_generation, num_of_gens);
+        assert_eq!(result.len(), POP_SIZE);
+        assert_eq!(gen_alg.current_generation, NUM_GENS);
         assert!(
             result.iter().all(|individual| (0..MAX_RAND).contains(&individual.value)),
             "One or more values are out of range!"
