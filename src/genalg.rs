@@ -149,11 +149,11 @@ mod tests {
     // These values are set this way, so that
     // both correctness of the algorithm
     // and speed of the algorithm can be always checked
-    const FITNEES_TEST_POP_SIZE: usize = 100;
-    const FITNEES_TEST_NUM_GENS: usize = 100;
-    const FITNEES_TEST_SELECTION_RATE: f32 = 0.5;
-    const FITNEES_TEST_MUTATION_RATE: f32 = 0.05;
-    const FITNEES_TEST_ELITE_COUNT: usize = 0;
+    const FITNESS_TEST_POP_SIZE: usize = 100;
+    const FITNESS_TEST_NUM_GENS: usize = 100;
+    const FITNESS_TEST_SELECTION_RATE: f32 = 0.5;
+    const FITNESS_TEST_MUTATION_RATE: f32 = 0.05;
+    const FITNESS_TEST_ELITE_COUNT: usize = 0;
     const EXPECTED_DUMMY_TOTAL_FITNESS_IMPROVEMENT_FACTOR: f32 = 2.0;
 
     const SPEED_TEST_BULK_COUNT: usize = 1000;
@@ -230,17 +230,17 @@ mod tests {
 
     #[test]
     fn test_run_genetic_algorithm_dummy_fitness() {
-        let mut gen_alg = GenAlg::<DummyGenetic>::new(FITNEES_TEST_POP_SIZE, None);
+        let mut gen_alg = GenAlg::<DummyGenetic>::new(FITNESS_TEST_POP_SIZE, None);
         let starting_fitness = gen_alg.get_total_fitness();
 
         println!("{:?}", gen_alg.current_population);
 
         gen_alg
             .run_genetic_algorithm(
-                FITNEES_TEST_NUM_GENS,
-                FITNEES_TEST_SELECTION_RATE,
-                FITNEES_TEST_MUTATION_RATE,
-                FITNEES_TEST_ELITE_COUNT,
+                FITNESS_TEST_NUM_GENS,
+                FITNESS_TEST_SELECTION_RATE,
+                FITNESS_TEST_MUTATION_RATE,
+                FITNESS_TEST_ELITE_COUNT,
             )
             .unwrap();
 
@@ -266,15 +266,15 @@ mod tests {
         println!("Running fitness test {:?} times", SPEED_TEST_BULK_COUNT);
 
         for _ in 0..SPEED_TEST_BULK_COUNT {
-            let mut gen_alg = GenAlg::<DummyGenetic>::new(FITNEES_TEST_POP_SIZE, None);
+            let mut gen_alg = GenAlg::<DummyGenetic>::new(FITNESS_TEST_POP_SIZE, None);
             let starting_fitness = gen_alg.get_total_fitness();
 
             gen_alg
                 .run_genetic_algorithm(
-                    FITNEES_TEST_NUM_GENS,
-                    FITNEES_TEST_SELECTION_RATE,
-                    FITNEES_TEST_MUTATION_RATE,
-                    FITNEES_TEST_ELITE_COUNT,
+                    FITNESS_TEST_NUM_GENS,
+                    FITNESS_TEST_SELECTION_RATE,
+                    FITNESS_TEST_MUTATION_RATE,
+                    FITNESS_TEST_ELITE_COUNT,
                 )
                 .unwrap();
 
