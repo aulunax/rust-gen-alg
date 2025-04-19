@@ -159,6 +159,10 @@ impl<T: Genetic + Clone> GenAlg<T> {
             .map(|ind| ind.fitness())
             .sum()
     }
+
+    pub fn calc_total_fitness(population: &Vec<FitnessIndiv<T>>) -> f32 {
+        population.iter().map(|ind| ind.fitness()).sum()
+    }
 }
 
 #[cfg(test)]
