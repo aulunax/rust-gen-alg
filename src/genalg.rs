@@ -32,6 +32,14 @@ impl<T: Genetic + Clone> GenAlg<T> {
 
         let mut rng = rand::rng();
 
+        let selected_count =
+            (self.current_population.len() as f32 * selection_rate).floor() as usize;
+
+        assert!(
+            selected_count >= 2,
+            "selection_rate too small. selection_rate should be large enough, to select at least 2 individuals."
+        );
+
         // sort population by fitness
         self.current_population
             .sort_by(|a, b| b.fitness().partial_cmp(&a.fitness()).unwrap());
@@ -39,15 +47,14 @@ impl<T: Genetic + Clone> GenAlg<T> {
         for generation in 0..num_of_generations {
             // put this in history maybe?
             let old_pop = self.current_population.clone();
-            let mut new_pop: Vec<T> = Vec::with_capacity(self.current_population.len());
+            let mut new_pop: Vec<T> = Vec::with_capacity(selected_count);
 
             // get top selected individuals
-            new_pop
-                .extend_from_slice(&self.current_population[..self.current_population.len() / 2]);
+            new_pop.extend_from_slice(&self.current_population[..selected_count]);
 
             // crossover
             while new_pop.len() != self.current_population.len() {
-                let parents = self.current_population[..self.current_population.len() / 2]
+                let parents = self.current_population[..selected_count]
                     .choose_multiple(&mut rng, 2)
                     .collect::<Vec<_>>();
 
@@ -234,6 +241,56 @@ mod tests {
             "One or more values are out of range!"
         );
         assert_eq!(&result, gen_vec);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_run_genetic_algorithm_selection_rate_low() {
+        let mut gen_alg = GenAlg::<DummyGenetic>::new(POP_SIZE, None);
+
+        println!("{:?}", gen_alg.current_population);
+
+        gen_alg
+            .run_genetic_algorithm(NUM_GENS, 0.001, 0.0, 0)
+            .unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_run_genetic_algorithm_selection_rate_not_in_range() {
+        let mut gen_alg = GenAlg::<DummyGenetic>::new(POP_SIZE, None);
+
+        println!("{:?}", gen_alg.current_population);
+
+        gen_alg
+            .run_genetic_algorithm(NUM_GENS, 2.0, 0.0, 0)
+            .unwrap();
+    }
+
+    #[test]
+    fn test_run_genetic_algorithm_selection_rate_in_range() {
+        let mut gen_alg = GenAlg::<DummyGenetic>::new(POP_SIZE, None);
+
+        println!("{:?}", gen_alg.current_population);
+
+        gen_alg
+            .run_genetic_algorithm(NUM_GENS, 0.1, 0.0, 0)
+            .unwrap();
+        gen_alg
+            .run_genetic_algorithm(NUM_GENS, 0.2, 0.0, 0)
+            .unwrap();
+        gen_alg
+            .run_genetic_algorithm(NUM_GENS, 0.5, 0.0, 0)
+            .unwrap();
+        gen_alg
+            .run_genetic_algorithm(NUM_GENS, 0.8, 0.0, 0)
+            .unwrap();
+        gen_alg
+            .run_genetic_algorithm(NUM_GENS, 0.9, 0.0, 0)
+            .unwrap();
+        gen_alg
+            .run_genetic_algorithm(NUM_GENS, 1.0, 0.0, 0)
+            .unwrap();
     }
 
     #[test]
