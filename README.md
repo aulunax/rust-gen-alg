@@ -13,3 +13,8 @@ WIP
 - Clean the code
 - Add better tests
 
+## Running the performance test
+```sh
+cargo test speed --release -- --ignored --show-output > speed-test.txt
+```
+
