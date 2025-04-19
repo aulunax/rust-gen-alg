@@ -17,11 +17,19 @@ impl<T: Genetic + Clone> GenAlg<T> {
         mutation_rate: f32,
         elite_count: usize,
     ) -> Result<Vec<T>, Box<dyn Error>> {
-        if elite_count > self.current_population.len() {
-            panic!(
-                "Number of elite individuals can't be higher than total number of individuals in a generation"
-            );
-        }
+        assert!(
+            elite_count <= self.current_population.len(),
+            "elite_count cannot be greater than population size"
+        );
+        assert!(
+            (0.0..=1.0).contains(&mutation_rate),
+            "mutation_rate must be in [0.0, 1.0]"
+        );
+        assert!(
+            (0.0..=1.0).contains(&selection_rate),
+            "selection_rate must be in [0.0, 1.0]"
+        );
+
         let mut rng = rand::rng();
 
         // sort population by fitness
