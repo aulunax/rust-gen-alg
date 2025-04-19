@@ -29,6 +29,7 @@ impl<T: Genetic + Clone> FitnessIndiv<T> {
 
 /// Genetic Algorithm struct
 pub struct GenAlg<T: Genetic + Clone> {
+    population_history: Vec<Vec<FitnessIndiv<T>>>,
     current_population: Vec<FitnessIndiv<T>>,
     current_generation: usize,
     best_individual: Option<FitnessIndiv<T>>,
@@ -61,6 +62,10 @@ impl<T: Genetic + Clone> GenAlg<T> {
         );
     }
 
+    pub fn population_history(&self) -> &Vec<Vec<FitnessIndiv<T>>> {
+        &self.population_history
+    }
+
     /// Returns the best individual found by GA
     pub fn run_genetic_algorithm(
         &mut self,
@@ -90,8 +95,8 @@ impl<T: Genetic + Clone> GenAlg<T> {
         self.try_update_best_individual();
 
         for generation in 0..num_of_generations {
-            // put this in history maybe?
-            // let old_pop = self.current_population.clone();
+            let old_pop = self.current_population.clone();
+            self.population_history.push(old_pop);
 
             // get top selected individuals
             self.current_population.truncate(selected_count);
@@ -141,6 +146,7 @@ impl<T: Genetic + Clone> GenAlg<T> {
         }
 
         Self {
+            population_history: Vec::new(),
             current_population: start_population,
             current_generation: 0,
             best_individual: None,
@@ -233,6 +239,15 @@ mod tests {
         !(vect
             .iter()
             .all(|x| x.obj.a == vect[0].obj.a && x.obj.b == vect[0].obj.b))
+    }
+
+    fn are_populations_same(
+        vect: &Vec<FitnessIndiv<DummyGenetic>>,
+        other: &Vec<FitnessIndiv<DummyGenetic>>,
+    ) -> bool {
+        vect.iter()
+            .zip(other)
+            .all(|(a, b)| a.obj == b.obj && a.fitness == b.fitness)
     }
 
     #[test]
@@ -372,6 +387,33 @@ mod tests {
             starting_fitness,
             final_fitness
         );
+    }
+
+    #[test]
+    fn test_run_genetic_algorithm_history() {
+        let mut gen_alg = GenAlg::<DummyGenetic>::new(POP_SIZE, None);
+
+        println!("{:?}", gen_alg.current_population);
+        gen_alg.run_genetic_algorithm(1, 0.5, 0.0, 0).unwrap();
+        let second_pop = gen_alg.current_population.clone();
+        gen_alg.run_genetic_algorithm(1, 0.5, 0.0, 0).unwrap();
+        let third_pop = gen_alg.current_population.clone();
+        gen_alg.run_genetic_algorithm(1, 0.5, 0.0, 0).unwrap();
+        let fourth_pop = gen_alg.current_population.clone();
+        gen_alg.run_genetic_algorithm(1, 0.5, 0.0, 0).unwrap();
+
+        assert!(are_populations_same(
+            &second_pop,
+            &gen_alg.population_history()[1].clone()
+        ));
+        assert!(are_populations_same(
+            &third_pop,
+            &gen_alg.population_history()[2].clone()
+        ));
+        assert!(are_populations_same(
+            &fourth_pop,
+            &gen_alg.population_history()[3].clone()
+        ));
     }
 
     #[test]
