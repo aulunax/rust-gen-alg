@@ -13,11 +13,12 @@ impl<T: Genetic + Clone> GenAlg<T> {
         num_of_generations: usize,
         selection_rate: f32,
         mutatation_rate: f32,
-        elite_count: usize
+        elite_count: usize,
     ) -> Result<Vec<T>, Box<dyn Error>> {
-
         if elite_count > self.current_population.len() {
-            panic!("Number of elite individuals can't be higher than total number of individuals in a generation");
+            panic!(
+                "Number of elite individuals can't be higher than total number of individuals in a generation"
+            );
         }
 
         for _ in 0..num_of_generations {
@@ -31,10 +32,7 @@ impl<T: Genetic + Clone> GenAlg<T> {
         Ok(self.current_population.clone())
     }
 
-    pub fn new(
-        population_size: usize,
-        initial_population: Option<&Vec<T>>,
-    ) -> Self {
+    pub fn new(population_size: usize, initial_population: Option<&Vec<T>>) -> Self {
         let mut start_population: Vec<T> = Vec::with_capacity(population_size);
 
         match initial_population {
@@ -42,10 +40,12 @@ impl<T: Genetic + Clone> GenAlg<T> {
             None => start_population.extend((0..population_size).map(|_| T::generate())),
         }
 
-        Self { current_population: start_population, current_generation: 0 }
+        Self {
+            current_population: start_population,
+            current_generation: 0,
+        }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -56,33 +56,59 @@ mod tests {
 
     #[derive(Clone, Debug, PartialEq)]
     struct DummyGenetic {
-        value: i32,
+        a: i32,
+        b: i32,
     }
 
     impl Genetic for DummyGenetic {
         fn generate() -> Self {
             let mut rng = rand::rng();
-            let random_value = rng.random_range(0..MAX_RAND);
+            let a = rng.random_range(0..MAX_RAND);
+            let b = rng.random_range(0..MAX_RAND);
 
-            DummyGenetic { value: random_value }
+            DummyGenetic { a: a, b: b }
         }
 
         fn fitness(&self) -> f32 {
-            todo!();
-        }
-        
-        fn crossover(&self, other: Self) -> Self {
-            todo!()
-        }
-        
-        fn mutate(&self) -> () {
-            todo!()
+            -(self.a - self.b).abs() as f32
         }
 
+        fn crossover(&self, other: Self) -> Self {
+            let mut rng = rand::rng();
+            if rng.random_bool(0.5) {
+                DummyGenetic {
+                    a: self.a,
+                    b: other.b,
+                }
+            } else {
+                DummyGenetic {
+                    a: other.a,
+                    b: self.b,
+                }
+            }
+        }
+
+        fn mutate(&mut self) -> () {
+            let mut rng = rand::rng();
+            match rng.random_bool(0.5) {
+                true => self.a = rng.random_range(0..MAX_RAND),
+                false => self.b = rng.random_range(0..MAX_RAND),
+            }
+        }
     }
 
     const POP_SIZE: usize = 20;
     const NUM_GENS: usize = 10;
+
+    fn are_vals_in_range(vect: &Vec<DummyGenetic>) -> bool {
+        vect.iter().all(|individual| {
+            (0..MAX_RAND).contains(&individual.a) && (0..MAX_RAND).contains(&individual.b)
+        })
+    }
+
+    fn are_vals_randomly_generated(vect: &Vec<DummyGenetic>) -> bool {
+        !(vect.iter().all(|x| x.a == vect[0].a && x.b == vect[0].b))
+    }
 
     #[test]
     fn test_gen_alg_creation() {
@@ -93,10 +119,11 @@ mod tests {
 
         assert_eq!(gen_alg.current_population.len(), POP_SIZE);
         assert!(
-            gen_vec.iter().all(|individual| (0..MAX_RAND).contains(&individual.value)),
+            are_vals_in_range(gen_vec),
             "One or more values are out of range!"
         );
-        assert!(!(gen_vec.iter().all(|x| x.value == gen_vec[0].value)), 
+        assert!(
+            are_vals_randomly_generated(gen_vec),
             "All elements in vector are equal, rng doesn't work"
         );
     }
@@ -112,10 +139,11 @@ mod tests {
 
         assert_eq!(gen_alg.current_population.len(), POP_SIZE);
         assert!(
-            gen_vec.iter().all(|individual| (0..MAX_RAND).contains(&individual.value)),
+            are_vals_in_range(gen_vec),
             "One or more values are out of range!"
         );
-        assert!(!(gen_vec.iter().all(|x| x.value == gen_vec[0].value)), 
+        assert!(
+            are_vals_randomly_generated(gen_vec),
             "All elements in vector are equal, rng doesn't work"
         );
     }
@@ -123,7 +151,9 @@ mod tests {
     #[test]
     fn test_run_genetic_algorithm() {
         let mut gen_alg = GenAlg::<DummyGenetic>::new(POP_SIZE, None);
-        let result = gen_alg.run_genetic_algorithm(NUM_GENS, 0.1, 0.1, 0).unwrap();
+        let result = gen_alg
+            .run_genetic_algorithm(NUM_GENS, 0.1, 0.1, 0)
+            .unwrap();
         let gen_vec = &gen_alg.current_population;
 
         println!("{:?}", gen_vec);
@@ -132,11 +162,9 @@ mod tests {
         assert_eq!(result.len(), POP_SIZE);
         assert_eq!(gen_alg.current_generation, NUM_GENS);
         assert!(
-            result.iter().all(|individual| (0..MAX_RAND).contains(&individual.value)),
+            are_vals_in_range(&result),
             "One or more values are out of range!"
         );
         assert_eq!(&result, gen_vec);
-
     }
 }
-
