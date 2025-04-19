@@ -6,11 +6,11 @@ successes:
 
 ---- genalg::tests::test_run_genetic_algorithm_dummy_fitness_speed_bulk stdout ----
 Running fitness test 1000 times
-Time elapsed: 612.987482ms
+Time elapsed: 580.623137ms
 
 
 successes:
     genalg::tests::test_run_genetic_algorithm_dummy_fitness_speed_bulk
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.61s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.58s
 

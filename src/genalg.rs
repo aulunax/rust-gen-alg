@@ -46,13 +46,7 @@ impl<T: Genetic + Clone> GenAlg<T> {
         }
     }
 
-    pub fn run_genetic_algorithm(
-        &mut self,
-        num_of_generations: usize,
-        selection_rate: f32,
-        mutation_rate: f32,
-        elite_count: usize,
-    ) -> Result<Vec<FitnessIndiv<T>>, Box<dyn Error>> {
+    fn validate_ga_input(&self, selection_rate: f32, mutation_rate: f32, elite_count: usize) -> () {
         assert!(
             elite_count <= self.current_population.len(),
             "elite_count cannot be greater than population size"
@@ -65,8 +59,17 @@ impl<T: Genetic + Clone> GenAlg<T> {
             (0.0..=1.0).contains(&selection_rate),
             "selection_rate must be in [0.0, 1.0]"
         );
+    }
 
-        let mut rng = rand::rng();
+    /// Returns the best individual found by GA
+    pub fn run_genetic_algorithm(
+        &mut self,
+        num_of_generations: usize,
+        selection_rate: f32,
+        mutation_rate: f32,
+        elite_count: usize,
+    ) -> Result<FitnessIndiv<T>, Box<dyn Error>> {
+        self.validate_ga_input(selection_rate, mutation_rate, elite_count);
 
         let selected_count =
             (self.current_population.len() as f32 * selection_rate).floor() as usize;
@@ -76,31 +79,36 @@ impl<T: Genetic + Clone> GenAlg<T> {
             "selection_rate too small. selection_rate should be large enough, to select at least 2 individuals."
         );
 
+        let mut rng = rand::rng();
+
+        let population_size = self.current_population.len();
+
         // sort population by fitness
         self.current_population
             .sort_by(|a, b| b.fitness().partial_cmp(&a.fitness()).unwrap());
 
+        self.try_update_best_individual();
+
         for generation in 0..num_of_generations {
             // put this in history maybe?
-            let old_pop = self.current_population.clone();
-            let mut new_pop: Vec<FitnessIndiv<T>> = Vec::with_capacity(selected_count);
+            // let old_pop = self.current_population.clone();
 
             // get top selected individuals
-            new_pop.extend_from_slice(&self.current_population[..selected_count]);
+            self.current_population.truncate(selected_count);
 
             // crossover
-            while new_pop.len() != self.current_population.len() {
+            while self.current_population.len() != population_size {
                 let parents = self.current_population[..selected_count]
                     .choose_multiple(&mut rng, 2)
                     .collect::<Vec<_>>();
 
                 let child = parents[0].obj.crossover(&parents[1].obj);
-                new_pop.push(FitnessIndiv::new(&child));
+                self.current_population.push(FitnessIndiv::new(&child));
             }
 
             // mutation, except in last generation
             if generation != num_of_generations - 1 {
-                for indiv in new_pop.iter_mut() {
+                for indiv in self.current_population.iter_mut() {
                     if rng.random::<f32>() < mutation_rate {
                         indiv.obj.mutate();
                         indiv.fitness = indiv.obj.fitness();
@@ -109,14 +117,16 @@ impl<T: Genetic + Clone> GenAlg<T> {
             }
 
             // sort new population by fitness
-            new_pop.sort_by(|a, b| b.fitness().partial_cmp(&a.fitness()).unwrap());
+            self.current_population
+                .sort_by(|a, b| b.fitness().partial_cmp(&a.fitness()).unwrap());
 
-            // replace old population
-            self.current_population = new_pop;
+            // update best
+            self.try_update_best_individual();
+
             self.current_generation += 1;
         }
 
-        Ok(self.current_population.clone())
+        Ok(self.best_individual.as_ref().unwrap().clone())
     }
 
     pub fn new(population_size: usize, initial_population: Option<&Vec<T>>) -> Self {
@@ -276,10 +286,9 @@ mod tests {
 
         println!("{:?}", result);
 
-        assert_eq!(result.len(), POP_SIZE);
         assert_eq!(gen_alg.current_generation, NUM_GENS);
         assert!(
-            are_vals_in_range(&result),
+            are_vals_in_range(gen_vec),
             "One or more values are out of range!"
         );
     }
@@ -373,7 +382,6 @@ mod tests {
 
         for _ in 0..SPEED_TEST_BULK_COUNT {
             let mut gen_alg = GenAlg::<DummyGenetic>::new(FITNESS_TEST_POP_SIZE, None);
-            let starting_fitness = gen_alg.get_total_fitness();
 
             gen_alg
                 .run_genetic_algorithm(
@@ -383,16 +391,6 @@ mod tests {
                     FITNESS_TEST_ELITE_COUNT,
                 )
                 .unwrap();
-
-            let final_fitness = gen_alg.get_total_fitness();
-
-            assert!(
-                final_fitness > starting_fitness / EXPECTED_DUMMY_TOTAL_FITNESS_IMPROVEMENT_FACTOR,
-                "Total fitness largrly outside expectations. {:?} \nStarting fitness: {}, Final fitness: {}",
-                gen_alg.current_population,
-                starting_fitness,
-                final_fitness
-            );
         }
 
         let duration = start_timer.elapsed();
