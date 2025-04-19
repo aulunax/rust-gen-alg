@@ -7,6 +7,7 @@ WIP
 ## TODO:
 - A lot of optimizations
 - Elitism
+- Different crossover patterns
 - Roulette wheel selection
 - Reorganize file structure
 - Clean the code

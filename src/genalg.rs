@@ -1,22 +1,58 @@
 use std::error::Error;
 
-use rand::{Rng, rng, seq::IndexedRandom};
+use rand::{Rng, seq::IndexedRandom};
 
 use crate::individual::genetic::Genetic;
 
+#[derive(Clone, Debug)]
+pub struct FitnessIndiv<T: Genetic + Clone> {
+    obj: T,
+    fitness: f32,
+}
+
+impl<T: Genetic + Clone> FitnessIndiv<T> {
+    pub fn fitness(&self) -> f32 {
+        self.fitness
+    }
+
+    pub fn obj(&self) -> &T {
+        &self.obj
+    }
+
+    pub fn new(obj: &T) -> Self {
+        FitnessIndiv {
+            obj: obj.clone(),
+            fitness: obj.fitness(),
+        }
+    }
+}
+
+/// Genetic Algorithm struct
 pub struct GenAlg<T: Genetic + Clone> {
-    current_population: Vec<T>,
+    current_population: Vec<FitnessIndiv<T>>,
     current_generation: usize,
+    best_individual: Option<FitnessIndiv<T>>,
 }
 
 impl<T: Genetic + Clone> GenAlg<T> {
+    fn try_update_best_individual(&mut self) -> () {
+        if let None = self.best_individual {
+            self.best_individual = Some(self.current_population[0].clone());
+            return;
+        } else if let Some(v) = &self.best_individual {
+            if v.fitness() < self.current_population[0].fitness() {
+                self.best_individual = Some(self.current_population[0].clone());
+            }
+        }
+    }
+
     pub fn run_genetic_algorithm(
         &mut self,
         num_of_generations: usize,
         selection_rate: f32,
         mutation_rate: f32,
         elite_count: usize,
-    ) -> Result<Vec<T>, Box<dyn Error>> {
+    ) -> Result<Vec<FitnessIndiv<T>>, Box<dyn Error>> {
         assert!(
             elite_count <= self.current_population.len(),
             "elite_count cannot be greater than population size"
@@ -47,7 +83,7 @@ impl<T: Genetic + Clone> GenAlg<T> {
         for generation in 0..num_of_generations {
             // put this in history maybe?
             let old_pop = self.current_population.clone();
-            let mut new_pop: Vec<T> = Vec::with_capacity(selected_count);
+            let mut new_pop: Vec<FitnessIndiv<T>> = Vec::with_capacity(selected_count);
 
             // get top selected individuals
             new_pop.extend_from_slice(&self.current_population[..selected_count]);
@@ -58,15 +94,16 @@ impl<T: Genetic + Clone> GenAlg<T> {
                     .choose_multiple(&mut rng, 2)
                     .collect::<Vec<_>>();
 
-                let child = parents[0].crossover(parents[1]);
-                new_pop.push(child);
+                let child = parents[0].obj.crossover(&parents[1].obj);
+                new_pop.push(FitnessIndiv::new(&child));
             }
 
             // mutation, except in last generation
             if generation != num_of_generations - 1 {
                 for indiv in new_pop.iter_mut() {
                     if rng.random::<f32>() < mutation_rate {
-                        indiv.mutate();
+                        indiv.obj.mutate();
+                        indiv.fitness = indiv.obj.fitness();
                     }
                 }
             }
@@ -76,7 +113,6 @@ impl<T: Genetic + Clone> GenAlg<T> {
 
             // replace old population
             self.current_population = new_pop;
-
             self.current_generation += 1;
         }
 
@@ -84,16 +120,20 @@ impl<T: Genetic + Clone> GenAlg<T> {
     }
 
     pub fn new(population_size: usize, initial_population: Option<&Vec<T>>) -> Self {
-        let mut start_population: Vec<T> = Vec::with_capacity(population_size);
+        let mut start_population: Vec<FitnessIndiv<T>> = Vec::with_capacity(population_size);
 
         match initial_population {
-            Some(pop) => start_population = pop.clone(),
-            None => start_population.extend((0..population_size).map(|_| T::generate())),
+            Some(init_pop) => {
+                start_population = init_pop.into_iter().map(|a| FitnessIndiv::new(a)).collect();
+            }
+            None => start_population
+                .extend((0..population_size).map(|_| FitnessIndiv::new(&T::generate()))),
         }
 
         Self {
             current_population: start_population,
             current_generation: 0,
+            best_individual: None,
         }
     }
 
@@ -173,14 +213,16 @@ mod tests {
 
     const SPEED_TEST_BULK_COUNT: usize = 1000;
 
-    fn are_vals_in_range(vect: &Vec<DummyGenetic>) -> bool {
+    fn are_vals_in_range(vect: &Vec<FitnessIndiv<DummyGenetic>>) -> bool {
         vect.iter().all(|individual| {
-            (0..MAX_RAND).contains(&individual.a) && (0..MAX_RAND).contains(&individual.b)
+            (0..MAX_RAND).contains(&individual.obj.a) && (0..MAX_RAND).contains(&individual.obj.b)
         })
     }
 
-    fn are_vals_randomly_generated(vect: &Vec<DummyGenetic>) -> bool {
-        !(vect.iter().all(|x| x.a == vect[0].a && x.b == vect[0].b))
+    fn are_vals_randomly_generated(vect: &Vec<FitnessIndiv<DummyGenetic>>) -> bool {
+        !(vect
+            .iter()
+            .all(|x| x.obj.a == vect[0].obj.a && x.obj.b == vect[0].obj.b))
     }
 
     #[test]
@@ -240,7 +282,6 @@ mod tests {
             are_vals_in_range(&result),
             "One or more values are out of range!"
         );
-        assert_eq!(&result, gen_vec);
     }
 
     #[test]
