@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+nom = "8.0.0"
 rand = "0.9.1"
 roulette-wheel = "0.2.2"
 

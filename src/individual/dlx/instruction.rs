@@ -1,3 +1,6 @@
+use std::fmt;
+use std::path::Display;
+
 use super::Opcode;
 use super::Register;
 
@@ -9,8 +12,56 @@ pub struct Instruction {
 }
 
 impl Instruction {
-    fn parse_instr(instr: &str) -> Self {
-        todo!()
+    fn format_instr(&self) -> String {
+        // String starting with opcode
+        let mut output_str = self.opcode.to_string().clone();
+        output_str.push(' ');
+
+        // Iterator for format
+        let mut format_chars = self.opcode.get_format().chars().peekable();
+
+        // Format parser
+        while let Some(c) = format_chars.next() {
+            if c == 'r' {
+                if let Some(digit_char) = format_chars.next() {
+                    if let Some(idx) = digit_char.to_digit(10) {
+                        if let Some(reg) = self.registers.get((idx - 1) as usize) {
+                            output_str.push_str(&format!("{}", reg));
+                        } else {
+                            panic!("invalid register while printing instruction");
+                        }
+                    } else {
+                        output_str.push(c);
+                        output_str.push(digit_char);
+                    }
+                } else {
+                    output_str.push(c);
+                }
+            } else if c == 'i' {
+                output_str.push_str(&format!("0x{:04X}", self.immidiate));
+            } else {
+                output_str.push(c);
+            }
+        }
+
+        output_str
+    }
+
+    fn parse_instr(instr: &str) -> Option<Self> {
+        let input = instr.trim();
+        let instr_parts: Vec<&str> = input.split_whitespace().collect();
+
+        if instr_parts.len() == 0 {
+            return None;
+        }
+
+        let opcode = Opcode::parse_instr(instr)?;
+
+        Some(Instruction {
+            opcode: opcode,
+            registers: vec![],
+            immidiate: 0,
+        })
     }
 
     pub fn new(instr: &str) -> Self {
@@ -18,10 +69,6 @@ impl Instruction {
     }
 
     pub fn get_bytes(&self) -> u32 {
-        todo!()
-    }
-
-    pub fn to_string(&self) -> String {
         todo!()
     }
 }
@@ -36,33 +83,31 @@ impl Default for Instruction {
     }
 }
 
-// match &self.inst {
-//             InstructionType::RType { opcode, registers } => {
-//                 format!(
-//                     "{} {}",
-//                     opcode,
-//                     registers
-//                         .iter()
-//                         .map(|r| r.to_string())
-//                         .collect::<Vec<_>>()
-//                         .join(", ")
-//                 )
-//             }
-//             InstructionType::IType {
-//                 opcode,
-//                 registers,
-//                 immediate,
-//             } => {
-//                 format!(
-//                     "{} {}, {}",
-//                     opcode,
-//                     registers
-//                         .iter()
-//                         .map(|r| r.to_string())
-//                         .collect::<Vec<_>>()
-//                         .join(", "),
-//                     immediate
-//                 )
-//             }
-//             InstructionType::JType { opcode, address } => format!("{} 0x{:08X}", opcode, address),
-//         }
+impl fmt::Display for Instruction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.format_instr())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_instruction_display() {
+        let inst = Instruction {
+            opcode: Opcode::LDW,
+            registers: vec![Register::R6, Register::R8],
+            immidiate: 32,
+        };
+
+        let inst_add = Instruction {
+            opcode: Opcode::ADD,
+            registers: vec![Register::R4, Register::R3, Register::R2],
+            immidiate: 32,
+        };
+
+        assert_eq!(inst.to_string(), "LDW R8, 0x0020(R6)");
+        assert_eq!(inst_add.to_string(), "ADD R4, R3, R2");
+    }
+}

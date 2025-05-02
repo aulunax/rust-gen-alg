@@ -42,3 +42,54 @@ impl fmt::Display for Register {
         write!(f, "{:?}", self)
     }
 }
+
+impl Register {
+    pub fn parse_reg(input: &str) -> Option<Register> {
+        if let Some(stripped) = input.strip_prefix('R') {
+            if let Ok(num) = stripped.parse::<i8>() {
+                match num {
+                    0..=31 => match num {
+                        0 => Some(Register::R0),
+                        1 => Some(Register::R1),
+                        2 => Some(Register::R2),
+                        3 => Some(Register::R3),
+                        4 => Some(Register::R4),
+                        5 => Some(Register::R5),
+                        6 => Some(Register::R6),
+                        7 => Some(Register::R7),
+                        8 => Some(Register::R8),
+                        9 => Some(Register::R9),
+                        10 => Some(Register::R10),
+                        11 => Some(Register::R11),
+                        12 => Some(Register::R12),
+                        13 => Some(Register::R13),
+                        14 => Some(Register::R14),
+                        15 => Some(Register::R15),
+                        16 => Some(Register::R16),
+                        17 => Some(Register::R17),
+                        18 => Some(Register::R18),
+                        19 => Some(Register::R19),
+                        20 => Some(Register::R20),
+                        21 => Some(Register::R21),
+                        22 => Some(Register::R22),
+                        23 => Some(Register::R23),
+                        24 => Some(Register::R24),
+                        25 => Some(Register::R25),
+                        26 => Some(Register::R26),
+                        27 => Some(Register::R27),
+                        28 => Some(Register::R28),
+                        29 => Some(Register::R29),
+                        30 => Some(Register::R30),
+                        31 => Some(Register::R31),
+                        _ => None,
+                    },
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+}

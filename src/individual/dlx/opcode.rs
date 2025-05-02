@@ -16,14 +16,6 @@ pub enum OpcodeType {
 /// - `$type`: The `OpcodeType` (RType, IType, JType) for the opcode.
 /// - `$format`: A format string for how to represent the operands of the opcode.
 ///
-/// # Example:
-/// ```rust
-/// define_opcodes! {
-///     NOP = 0x00, OpcodeType::RType, "",
-///     ADD = 0x01, OpcodeType::RType, "r1, r2, r3",
-///     LDW = 0x02, OpcodeType::IType, "r2, i(r1)"
-/// }
-/// ```
 macro_rules! define_opcodes {
     ($( $name:ident = $value:expr, $type:expr, $format:expr ),*) => {
         #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,5 +115,12 @@ mod tests {
         assert_eq!(Opcode::NOP.get_type(), OpcodeType::RType);
         assert_eq!(Opcode::LDW.get_type(), OpcodeType::IType);
         assert_eq!(Opcode::ADD.get_type(), OpcodeType::RType);
+    }
+
+    #[test]
+    fn test_valid_display() {
+        assert_eq!(Opcode::NOP.to_string(), "NOP");
+        assert_eq!(Opcode::LDW.to_string(), "LDW");
+        assert_eq!(Opcode::ADD.to_string(), "ADD");
     }
 }
