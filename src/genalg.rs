@@ -1,6 +1,7 @@
 use std::error::Error;
 
 use rand::{Rng, seq::IndexedRandom};
+use roulette_wheel::RouletteWheel;
 
 use crate::individual::genetic::Genetic;
 
@@ -24,6 +25,10 @@ impl<T: Genetic + Clone> FitnessIndiv<T> {
             obj: obj.clone(),
             fitness: obj.fitness(),
         }
+    }
+
+    pub fn into_tuple(&self) -> (f32, T) {
+        (self.fitness, self.obj.clone())
     }
 }
 
@@ -99,6 +104,23 @@ impl<T: Genetic + Clone> GenAlg<T> {
             self.population_history.push(old_pop);
 
             // get top selected individuals
+            //self.current_population.truncate(selected_count);
+
+            // roulette wheel selection
+            // let rw: RouletteWheel<T> = self
+            //     .current_population
+            //     .iter()
+            //     .map(|indiv| indiv.into_tuple())
+            //     .collect();
+
+            // self.current_population = rw
+            //     .into_iter()
+            //     .map(|(f, ind)| FitnessIndiv {
+            //         obj: ind,
+            //         fitness: f,
+            //     })
+            //     .collect();
+
             self.current_population.truncate(selected_count);
 
             // crossover
@@ -190,7 +212,7 @@ mod tests {
         }
 
         fn fitness(&self) -> f32 {
-            -((self.a - self.b).abs()) as f32
+            1000.0 / 2.0_f32.powf(((self.a - self.b).abs() as f32).sqrt())
         }
 
         fn crossover(&self, other: &Self) -> Self {
