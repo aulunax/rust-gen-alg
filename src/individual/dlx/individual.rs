@@ -4,7 +4,7 @@ use crate::individual::{dlx, genetic::Genetic};
 
 use super::Instruction;
 
-const DLX_INDIV_MAX_SIZE: usize = 50;
+const DLX_INDIV_MAX_SIZE: usize = 40;
 
 /// Individual for the DLX algorithm
 #[derive(Clone, Debug)]
@@ -31,6 +31,13 @@ impl Genetic for Individual {
 }
 
 impl Individual {
+    /// Parses a string of instructions into an Individual.
+    ///
+    /// Instructions are separated by newlines.
+    /// ## Arguments
+    /// * `input` - A string containing the instructions to parse.
+    /// ## Returns
+    /// * An `Individual` containing the parsed instructions.
     pub fn parse(input: &str) -> Self {
         let mut instrs: Vec<Instruction> = vec![];
 
@@ -49,6 +56,13 @@ impl Individual {
         }
     }
 
+    /// Creates a new Individual from a string of instructions.
+    ///
+    /// Instructions are separated by newlines.
+    /// ## Arguments
+    /// * `input` - A string containing the instructions to parse.
+    /// ## Returns
+    /// * An `Individual` containing the parsed instructions.
     pub fn new(input: &str) -> Self {
         Individual::parse(input)
     }
