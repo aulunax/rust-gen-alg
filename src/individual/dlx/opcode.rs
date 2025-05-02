@@ -81,6 +81,7 @@ macro_rules! define_opcodes {
 }
 
 // Define opcodes here:
+//  Opcode | Byte representation | Type | Format of instruction
 define_opcodes! {
     NOP = 0x00, OpcodeType::RType, "",
     ADD = 0x01, OpcodeType::RType, "r1, r2, r3",
