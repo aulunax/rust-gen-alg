@@ -1,6 +1,6 @@
 use std::fmt;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OpcodeType {
     RType,
     IType,
@@ -26,7 +26,7 @@ pub enum OpcodeType {
 /// ```
 macro_rules! define_opcodes {
     ($( $name:ident = $value:expr, $type:expr, $format:expr ),*) => {
-        #[derive(Debug, Clone)]
+        #[derive(Debug, Clone, PartialEq, Eq)]
         #[repr(u8)]
         pub enum Opcode {
             $(
@@ -50,6 +50,29 @@ macro_rules! define_opcodes {
                     )*
                 }
             }
+
+            fn parse(input: &str) -> Option<Opcode> {
+                match input {
+                    $(
+                        stringify!($name) => Some(Opcode::$name),
+                    )*
+                    _ => None,
+                }
+            }
+
+            pub fn parse_instr(input: &str) -> Option<Opcode> {
+                let input = input.trim();
+                let instr_parts: Vec<&str> = input.split_whitespace().collect();
+
+                if instr_parts.len() == 0 {
+                    return None;
+                }
+
+                if let Some(opcode) = Opcode::parse(instr_parts[0]) {
+                    return Some(opcode);
+                }
+                None
+            }
         }
 
         impl fmt::Display for Opcode {
@@ -70,4 +93,35 @@ define_opcodes! {
     NOP = 0x00, OpcodeType::RType, "",
     ADD = 0x01, OpcodeType::RType, "r1, r2, r3",
     LDW = 0x02, OpcodeType::IType, "r2, i(r1)"
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_valid_opcodes() {
+        assert_eq!(Opcode::parse_instr("ADD R1 R2 R3"), Some(Opcode::ADD));
+        assert_eq!(Opcode::parse_instr("LDW R1 R2"), Some(Opcode::LDW));
+        assert_eq!(Opcode::parse_instr("NOP"), Some(Opcode::NOP));
+    }
+
+    #[test]
+    fn test_empty_input() {
+        assert_eq!(Opcode::parse_instr(""), None);
+    }
+
+    #[test]
+    fn test_valid_format() {
+        assert_eq!(Opcode::NOP.get_format(), "");
+        assert_eq!(Opcode::LDW.get_format(), "r2, i(r1)");
+        assert_eq!(Opcode::ADD.get_format(), "r1, r2, r3");
+    }
+
+    #[test]
+    fn test_valid_type() {
+        assert_eq!(Opcode::NOP.get_type(), OpcodeType::RType);
+        assert_eq!(Opcode::LDW.get_type(), OpcodeType::IType);
+        assert_eq!(Opcode::ADD.get_type(), OpcodeType::RType);
+    }
 }
