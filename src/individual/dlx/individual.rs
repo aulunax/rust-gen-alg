@@ -1,5 +1,3 @@
-use rand::seq::index::IndexVecIntoIter;
-
 use crate::individual::{dlx, genetic::Genetic};
 
 /// Individual for the DLX algorithm
