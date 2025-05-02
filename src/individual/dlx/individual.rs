@@ -2,6 +2,8 @@ use rand::seq::index::IndexVecIntoIter;
 
 use crate::individual::{dlx, genetic::Genetic};
 
+/// Individual for the DLX algorithm
+#[derive(Clone, Debug)]
 pub struct Individual {
     instructions: Vec<dlx::Individual>,
 }

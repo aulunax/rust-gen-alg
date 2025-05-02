@@ -5,6 +5,9 @@ use roulette_wheel::RouletteWheel;
 
 use crate::individual::genetic::Genetic;
 
+/// Individual that is put in genetic algorithm.
+///
+/// Implements Genetic trait, which allows it to be used as proper population individual
 #[derive(Clone, Debug)]
 pub struct FitnessIndiv<T: Genetic + Clone> {
     obj: T,
@@ -41,6 +44,7 @@ pub struct GenAlg<T: Genetic + Clone> {
 }
 
 impl<T: Genetic + Clone> GenAlg<T> {
+    /// Updates self.best_individual to the best individual in the current population
     fn try_update_best_individual(&mut self) -> () {
         if let None = self.best_individual {
             self.best_individual = Some(self.current_population[0].clone());
@@ -52,6 +56,7 @@ impl<T: Genetic + Clone> GenAlg<T> {
         }
     }
 
+    /// Validates the input parameters for the genetic algorithm
     fn validate_ga_input(&self, selection_rate: f32, mutation_rate: f32, elite_count: usize) -> () {
         assert!(
             elite_count <= self.current_population.len(),
@@ -67,11 +72,19 @@ impl<T: Genetic + Clone> GenAlg<T> {
         );
     }
 
+    /// Getter for population history
     pub fn population_history(&self) -> &Vec<Vec<FitnessIndiv<T>>> {
         &self.population_history
     }
 
-    /// Returns the best individual found by GA
+    /// Main function for running the genetic algorithm
+    /// ## Arguments
+    /// * `num_of_generations` - number of generations to run
+    /// * `selection_rate` - fraction of population to select for crossover (0.0 - 1.0)
+    /// * `mutation_rate` - fraction of population to mutate (0.0 - 1.0)
+    /// * `elite_count` - number of elite individuals to keep in the population
+    /// ## Returns
+    /// * `Result<FitnessIndiv<T>, Box<dyn Error>>` - best individual found by GA
     pub fn run_genetic_algorithm(
         &mut self,
         num_of_generations: usize,
@@ -156,6 +169,12 @@ impl<T: Genetic + Clone> GenAlg<T> {
         Ok(self.best_individual.as_ref().unwrap().clone())
     }
 
+    /// Creates a new genetic algorithm instance
+    /// ## Arguments
+    /// * `population_size` - size of the population
+    /// * `initial_population` - optional initial population
+    /// ## Returns
+    /// * `GenAlg<T>` - new genetic algorithm instance
     pub fn new(population_size: usize, initial_population: Option<&Vec<T>>) -> Self {
         let mut start_population: Vec<FitnessIndiv<T>> = Vec::with_capacity(population_size);
 
@@ -175,6 +194,7 @@ impl<T: Genetic + Clone> GenAlg<T> {
         }
     }
 
+    /// Returns total fitness of the current population
     pub fn get_total_fitness(&self) -> f32 {
         self.current_population
             .iter()
@@ -182,6 +202,7 @@ impl<T: Genetic + Clone> GenAlg<T> {
             .sum()
     }
 
+    /// Returns total fitness of the given population
     pub fn calc_total_fitness(population: &Vec<FitnessIndiv<T>>) -> f32 {
         population.iter().map(|ind| ind.fitness()).sum()
     }

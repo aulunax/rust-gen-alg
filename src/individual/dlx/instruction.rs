@@ -1,7 +1,6 @@
-use std::fmt;
-use std::path::Display;
-
+use core::panic;
 use regex::Regex;
+use std::fmt;
 
 use super::Opcode;
 use super::Register;
@@ -42,7 +41,7 @@ impl Instruction {
                 } else {
                     output_str.push(c);
                 }
-            } else if c == 'i' {
+            } else if c == 'i' || c == 'j' {
                 output_str.push_str(&format!("0x{:04X}", self.immidiate));
             } else {
                 output_str.push(c);
@@ -52,6 +51,9 @@ impl Instruction {
         output_str
     }
 
+    /// Splits the operands of an instruction into a vector of strings.
+    ///
+    /// Assumes that operands consist of only alphanumeric characters, so any not alphanumeric characters are treated as separators.
     fn split_operands(input: &str) -> Vec<String> {
         let re = Regex::new(r"0x[0-9a-fA-F]+|R\d+|\d+").unwrap();
         re.find_iter(input)
@@ -59,49 +61,77 @@ impl Instruction {
             .collect()
     }
 
+    /// Parses an instruction string into an Instruction struct.
+    ///
+    /// The instruction string should be in the format "OPCODE FORMAT", where OPCODE is the opcode and FORMAT is the format specified by the opcode.
+    /// ## Arguments
+    /// * `instr` - The instruction string to parse.
+    ///
+    /// ## Returns
+    /// * `Some(Instruction)` if the instruction string is valid and can be parsed.
+    /// * `None` if the instruction string is invalid or cannot be parsed.
     fn parse_instr(instr: &str) -> Option<Self> {
+        // First get the opcode
         let input = instr.trim();
         let instr_parts: Vec<&str> = input.split_whitespace().collect();
-
         if instr_parts.len() == 0 {
             return None;
         }
 
         let opcode = Opcode::parse_instr(instr)?;
 
+        // Get format from opcode
         let mut format_chars = opcode.get_format().chars().peekable();
+
+        // Get operands vector from instruction
         let operands_str = if let Some((_, rest)) = input.split_once(' ') {
             rest
         } else {
             ""
         };
-
         let operands_parts: Vec<String> = Instruction::split_operands(operands_str);
 
+        // Temp output vars
         let mut regs: Vec<(usize, Register)> = vec![];
         let mut immidiate: i32 = 0;
 
         let mut current_operand_index = 0;
 
+        // Format parser
         while let Some(c) = format_chars.next() {
             if c == 'r' {
                 if let Some(digit_char) = format_chars.next() {
                     if let Some(idx) = digit_char.to_digit(10) {
-                        regs.push((
-                            (idx - 1) as usize,
-                            Register::parse_reg(&operands_parts[current_operand_index]).unwrap(),
-                        ));
+                        if current_operand_index < operands_parts.len() {
+                            regs.push((
+                                (idx - 1) as usize,
+                                Register::parse_reg(&operands_parts[current_operand_index])
+                                    .unwrap(),
+                            ));
+                        }
                         current_operand_index += 1;
                     }
                 }
-            } else if c == 'i' {
-                let cleaned_immidiate =
-                    operands_parts[current_operand_index].trim_start_matches("0x");
-                immidiate = i32::from_str_radix(cleaned_immidiate, 16).unwrap();
+            } else if c == 'i' || c == 'j' {
+                if current_operand_index < operands_parts.len() {
+                    let cleaned_immidiate =
+                        operands_parts[current_operand_index].trim_start_matches("0x");
+                    immidiate = i32::from_str_radix(cleaned_immidiate, 16).unwrap();
+                }
                 current_operand_index += 1;
             }
         }
 
+        // Check if correct number of operands was used
+        if current_operand_index != operands_parts.len() {
+            panic!(
+                "Invalid number of operands expected {} operands, got {}",
+                current_operand_index,
+                operands_parts.len()
+            );
+        }
+
+        // Convert from (index, Register) to Register vector
         let max_index = regs.iter().map(|(index, _)| *index).max().unwrap_or(0);
         let mut registers = vec![Register::R0; max_index + 1];
         for (index, reg) in regs {
@@ -125,6 +155,7 @@ impl Instruction {
 }
 
 impl Default for Instruction {
+    /// Returns a default instruction with opcode NOP and no operands.
     fn default() -> Self {
         Instruction {
             opcode: Opcode::NOP,
@@ -143,6 +174,42 @@ impl fmt::Display for Instruction {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_default_instruction() {
+        let inst = Instruction::default();
+        assert_eq!(inst.opcode, Opcode::NOP);
+        assert_eq!(inst.registers.len(), 0);
+        assert_eq!(inst.immidiate, 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid number of operands expected 3 operands, got 4")]
+    fn test_parse_too_many_operands() {
+        let inst = Instruction::parse_instr("ADD R1, R2, R3, R4");
+        assert!(inst.is_none());
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid number of operands expected 0 operands, got 4")]
+    fn test_parse_too_many_operands2() {
+        let inst = Instruction::parse_instr("NOP R1, R2, R3, R4");
+        assert!(inst.is_none());
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid number of operands expected 3 operands, got 2")]
+    fn test_parse_too_less_operands() {
+        let inst = Instruction::parse_instr("ADD R1, R2");
+        assert!(inst.is_none());
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid number of operands expected 3 operands, got 0")]
+    fn test_parse_too_less_operands2() {
+        let inst = Instruction::parse_instr("ADD");
+        assert!(inst.is_none());
+    }
 
     #[test]
     fn test_instruction_display() {
@@ -164,9 +231,16 @@ mod test {
             immidiate: 0,
         };
 
+        let inst_brz = Instruction {
+            opcode: Opcode::BRZ,
+            registers: vec![Register::R4, Register::R3],
+            immidiate: 32,
+        };
+
         assert_eq!(inst.to_string(), "LDW R8, 0x0020(R6)");
         assert_eq!(inst_add.to_string(), "ADD R4, R3, R2");
         assert_eq!(inst_nop.to_string(), "NOP");
+        assert_eq!(inst_brz.to_string(), "BRZ R3, 0x0020");
     }
 
     #[test]
@@ -174,9 +248,11 @@ mod test {
         let add_inst = Instruction::new("ADD R4, R3, R2");
         let ldw_inst = Instruction::new("LDW R8, 0x0020(R6)");
         let nop_inst = Instruction::new("NOP");
+        let brz_inst = Instruction::new("BRZ R3, 0x0020");
 
         assert_eq!(ldw_inst.to_string(), "LDW R8, 0x0020(R6)");
         assert_eq!(add_inst.to_string(), "ADD R4, R3, R2");
         assert_eq!(nop_inst.to_string(), "NOP");
+        assert_eq!(brz_inst.to_string(), "BRZ R3, 0x0020");
     }
 }

@@ -1,5 +1,6 @@
 use std::fmt;
 
+/// Represents the registers in the DLX architecture.
 #[derive(Debug, Clone)]
 #[repr(i8)]
 pub enum Register {
@@ -44,6 +45,9 @@ impl fmt::Display for Register {
 }
 
 impl Register {
+    /// Parses a string to a Register enum.
+    /// The string should be in the format "R0", "R1", ..., "R31".
+    /// Returns None if the string is not a valid register.
     pub fn parse_reg(input: &str) -> Option<Register> {
         if let Some(stripped) = input.strip_prefix('R') {
             if let Ok(num) = stripped.parse::<i8>() {
