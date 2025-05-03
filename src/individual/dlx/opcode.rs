@@ -1,8 +1,12 @@
 use std::fmt;
 
+use rand::seq::IndexedRandom;
+
+use super::Register;
+
 /// Represents the type of opcode in the instruction set architecture.
 /// Currently unused
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OpcodeType {
     RType,
     IType,
@@ -19,12 +23,12 @@ pub enum OpcodeType {
 /// - `$format`: A format string for how to represent the operands of the opcode.
 ///
 macro_rules! define_opcodes {
-    ($( $name:ident = $value:expr, $type:expr, $format:expr ),*) => {
+    ($( $name:ident = $value:expr, $type:expr, $format:expr, $func:expr ),*) => {
 
         /// Enum representing the opcodes in the instruction set architecture.
         ///
         /// The byte value, type, and format string are associated with each variant.
-        #[derive(Debug, Clone, PartialEq, Eq)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         #[repr(u8)]
         pub enum Opcode {
             $(
@@ -50,6 +54,17 @@ macro_rules! define_opcodes {
                     )*
                 }
             }
+
+            /// Execute an instruction based on the opcode
+            pub fn execute(&self, regs: &mut Vec<&mut Register>, imm: &mut i32) -> () {
+                match self {
+                    $(
+                        Opcode::$name => $func(regs, imm),
+                    )*
+                }
+            }
+
+
 
             /// Parses an exact string to an Opcode enum.
             /// The string should be in the format "ADD", "LDW", etc.
@@ -93,35 +108,70 @@ macro_rules! define_opcodes {
                 write!(f, "{}", s)
             }
         }
+
+        pub const ALL_OPCODES: &[Opcode] = &[
+            $(
+                Opcode::$name,
+            )*
+        ];
     };
 }
+
+const ALL_RAND_OPCODES: &[Opcode] = &[
+    Opcode::ADD,
+    Opcode::LDW,
+    Opcode::STW,
+    Opcode::SUB,
+    Opcode::MUL,
+    Opcode::DIV,
+    Opcode::AND,
+    Opcode::OR,
+    Opcode::XOR,
+    Opcode::SUBI,
+    Opcode::MULI,
+    Opcode::ADDI,
+    Opcode::DIVI,
+    Opcode::ANDI,
+    Opcode::ORI,
+    Opcode::XORI,
+    Opcode::BRZ,
+];
+
+impl Opcode {
+    pub fn rand() -> Self {
+        let mut rng = rand::rng();
+        *ALL_RAND_OPCODES.choose(&mut rng).unwrap()
+    }
+}
+
+fn nop_handler(regs: &mut Vec<&mut Register>, imm: &mut i32) {}
 
 // Define opcodes here:
 //  Opcode | Byte representation | Type | Format of instruction
 define_opcodes! {
-    NOP   = 0x00, OpcodeType::RType, "",
-    ADD   = 0x01, OpcodeType::RType, "r1, r2, r3",
-    LDW   = 0x02, OpcodeType::IType, "r2, i(r1)",
-    STW   = 0x03, OpcodeType::IType, "r2, i(r1)",
-    SUB   = 0x04, OpcodeType::RType, "r1, r2, r3",
-    MUL   = 0x05, OpcodeType::RType, "r1, r2, r3",
-    DIV   = 0x06, OpcodeType::RType, "r1, r2, r3",
-    AND   = 0x07, OpcodeType::RType, "r1, r2, r3",
-    OR    = 0x08, OpcodeType::RType, "r1, r2, r3",
-    XOR   = 0x09, OpcodeType::RType, "r1, r2, r3",
-    ADDI  = 0x0A, OpcodeType::IType, "r1, i, r2",
-    SUBI  = 0x0B, OpcodeType::IType, "r1, i, r2",
-    MULI  = 0x0C, OpcodeType::IType, "r1, i, r2",
-    DIVI  = 0x0D, OpcodeType::IType, "r1, i, r2",
-    ANDI  = 0x0E, OpcodeType::IType, "r1, i, r2",
-    ORI   = 0x0F, OpcodeType::IType, "r1, i, r2",
-    XORI  = 0x10, OpcodeType::IType, "r1, i, r2",
-    BRZ   = 0x11, OpcodeType::IType, "r2, j",
-    BRNZ  = 0x12, OpcodeType::IType, "r2, j",
-    BRGT  = 0x13, OpcodeType::IType, "r2, j",
-    BRGE  = 0x14, OpcodeType::IType, "r2, j",
-    BRLT  = 0x15, OpcodeType::IType, "r2, j",
-    BRLE  = 0x16, OpcodeType::IType, "r2, j"
+    NOP   = 0x00, OpcodeType::RType, "", nop_handler,
+    ADD   = 0x01, OpcodeType::RType, "r1, r2, r3", nop_handler,
+    LDW   = 0x02, OpcodeType::IType, "r2, i(r1)", nop_handler,
+    STW   = 0x03, OpcodeType::IType, "r2, i(r1)", nop_handler,
+    SUB   = 0x04, OpcodeType::RType, "r1, r2, r3", nop_handler,
+    MUL   = 0x05, OpcodeType::RType, "r1, r2, r3", nop_handler,
+    DIV   = 0x06, OpcodeType::RType, "r1, r2, r3", nop_handler,
+    AND   = 0x07, OpcodeType::RType, "r1, r2, r3", nop_handler,
+    OR    = 0x08, OpcodeType::RType, "r1, r2, r3", nop_handler,
+    XOR   = 0x09, OpcodeType::RType, "r1, r2, r3", nop_handler,
+    SUBI  = 0x0B, OpcodeType::IType, "r1, i, r2", nop_handler,
+    MULI  = 0x0C, OpcodeType::IType, "r1, i, r2", nop_handler,
+    ADDI  = 0x0A, OpcodeType::IType, "r1, i, r2", nop_handler,
+    DIVI  = 0x0D, OpcodeType::IType, "r1, i, r2", nop_handler,
+    ANDI  = 0x0E, OpcodeType::IType, "r1, i, r2", nop_handler,
+    ORI   = 0x0F, OpcodeType::IType, "r1, i, r2", nop_handler,
+    XORI  = 0x10, OpcodeType::IType, "r1, i, r2", nop_handler,
+    BRZ   = 0x11, OpcodeType::IType, "r2, j", nop_handler,
+    BRNZ  = 0x12, OpcodeType::IType, "r2, j", nop_handler,
+    BRGT  = 0x13, OpcodeType::IType, "r2, j", nop_handler,
+    BRGE  = 0x14, OpcodeType::IType, "r2, j", nop_handler,
+    BRLT  = 0x15, OpcodeType::IType, "r2, j", nop_handler,
+    BRLE  = 0x16, OpcodeType::IType, "r2, j", nop_handler
 }
 
 #[cfg(test)]

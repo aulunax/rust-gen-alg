@@ -1,5 +1,7 @@
 use std::fmt;
 
+use rand::Rng;
+
 /// Represents the registers in the DLX architecture.
 #[derive(Debug, Clone)]
 #[repr(i8)]
@@ -45,6 +47,17 @@ impl fmt::Display for Register {
 }
 
 impl Register {
+    pub fn rand_up_to(n: usize) -> Option<Self> {
+        if n > 31 {
+            return None;
+        }
+
+        let mut rng = rand::rng();
+
+        let index = rng.random_range(0..=n);
+        Some(unsafe { std::mem::transmute(index as i8) })
+    }
+
     /// Parses a string to a Register enum.
     /// The string should be in the format "R0", "R1", ..., "R31".
     ///

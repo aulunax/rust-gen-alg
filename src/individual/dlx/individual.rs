@@ -1,8 +1,17 @@
 use std::fmt;
 
+use rand::{
+    Rng,
+    distr::{Distribution, weighted::WeightedIndex},
+    random, random_range, rng,
+};
+
 use crate::individual::{dlx, genetic::Genetic};
 
-use super::Instruction;
+use super::{
+    Opcode, Register,
+    instruction::{self, MAX_IMMEDIATE_FOR_RAND, MAX_REGISTER_FOR_RAND},
+};
 
 const DLX_INDIV_MAX_SIZE: usize = 40;
 
@@ -12,13 +21,109 @@ pub struct Individual {
     instructions: Vec<dlx::Instruction>,
 }
 
+impl Individual {
+    fn first_nop_index(&self) -> usize {
+        let index = self
+            .instructions
+            .iter()
+            .position(|a| a.get_opcode() == &Opcode::NOP);
+
+        match index {
+            Some(n) => n,
+            None => DLX_INDIV_MAX_SIZE,
+        }
+    }
+
+    fn add_rand_instruction(&mut self) -> () {
+        let last_pos = self.first_nop_index();
+
+        if last_pos >= DLX_INDIV_MAX_SIZE {
+            return;
+        }
+
+        let mut rng = rand::rng();
+
+        let position = rng.random_range(0..=last_pos);
+
+        let instr = dlx::Instruction::get_rand();
+
+        self.instructions.insert(position, instr);
+        self.instructions.pop();
+    }
+
+    fn change_rand_instruction(&mut self) -> () {
+        let last_pos = self.first_nop_index();
+
+        if last_pos >= DLX_INDIV_MAX_SIZE {
+            return;
+        }
+
+        let mut rng = rand::rng();
+
+        let position = rng.random_range(0..=last_pos);
+
+        let instr = dlx::Instruction::get_rand();
+
+        self.instructions[position] = instr;
+    }
+
+    fn change_operands(&mut self) -> () {
+        let last_pos = self.first_nop_index();
+        let mut rng = rand::rng();
+        let rand_index = rng.random_range(0..last_pos);
+
+        let instr_type = self.instructions[rand_index].get_opcode().get_type();
+
+        match instr_type {
+            dlx::opcode::OpcodeType::RType => self.rand_change_reg_in_instruction(rand_index),
+            dlx::opcode::OpcodeType::IType => {
+                if random::<bool>() {
+                    self.rand_change_reg_in_instruction(rand_index);
+                } else {
+                    self.rand_change_imm_in_instruction(rand_index);
+                }
+            }
+            dlx::opcode::OpcodeType::JType => todo!(),
+        }
+    }
+
+    fn rand_change_reg_in_instruction(&mut self, index: usize) -> () {
+        let register = Register::rand_up_to(MAX_REGISTER_FOR_RAND).unwrap();
+
+        self.instructions[index].set_register(None, register);
+    }
+
+    fn rand_change_imm_in_instruction(&mut self, index: usize) -> () {
+        let mut rng = rand::rng();
+        let imm = rng.random_range(-MAX_IMMEDIATE_FOR_RAND..MAX_IMMEDIATE_FOR_RAND);
+
+        self.instructions[index].set_immidiate(imm);
+    }
+
+    fn get_inner_loop_bounds(&self) -> (usize, usize) {
+        (0, self.instructions.len() - 1)
+    }
+
+    fn get_setup_part_bounds(&self) -> (usize, usize) {
+        (0, self.instructions.len() - 1)
+    }
+
+    fn get_outer_loop_top_part_bounds(&self) -> (usize, usize) {
+        (0, self.instructions.len() - 1)
+    }
+
+    fn get_outer_loop_bottom_part_bounds(&self) -> (usize, usize) {
+        (0, self.instructions.len() - 1)
+    }
+}
+
 impl Genetic for Individual {
     fn fitness(&self) -> f32 {
-        todo!()
+        1.0
     }
 
     fn generate() -> Self {
-        todo!()
+        Individual::default()
     }
 
     fn crossover(&self, other: &Self) -> Self {
@@ -26,7 +131,17 @@ impl Genetic for Individual {
     }
 
     fn mutate(&mut self) -> () {
-        todo!()
+        let choices = [0, 1, 2, 3];
+        let weights = [10, 50, 0, 0];
+        let dist = WeightedIndex::new(&weights).unwrap();
+
+        let mut rng = rand::rng();
+        match choices[dist.sample(&mut rng)] {
+            0 => self.add_rand_instruction(),
+            1 => self.change_operands(),
+            2 => self.change_rand_instruction(),
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -39,16 +154,16 @@ impl Individual {
     /// ## Returns
     /// * An `Individual` containing the parsed instructions.
     pub fn parse(input: &str) -> Self {
-        let mut instrs: Vec<Instruction> = vec![];
+        let mut instrs: Vec<dlx::Instruction> = vec![];
 
         let instrs_parts: Vec<&str> = input.split_terminator("\n").collect();
 
         for instr in instrs_parts {
-            instrs.push(Instruction::new(instr));
+            instrs.push(dlx::Instruction::new(instr));
         }
 
         while instrs.len() < DLX_INDIV_MAX_SIZE {
-            instrs.push(Instruction::default());
+            instrs.push(dlx::Instruction::default());
         }
 
         Individual {
@@ -65,6 +180,12 @@ impl Individual {
     /// * An `Individual` containing the parsed instructions.
     pub fn new(input: &str) -> Self {
         Individual::parse(input)
+    }
+}
+
+impl Default for Individual {
+    fn default() -> Self {
+        Individual::new("NOP")
     }
 }
 
@@ -125,5 +246,47 @@ BRLT R8, 0x0008"#;
             indiv.instructions.len() == DLX_INDIV_MAX_SIZE,
             "Individual is not filled with correct amount of instructions."
         );
+    }
+
+    #[test]
+    fn test_dlx_indiv_generate() {
+        let indiv = Individual::generate();
+        assert!(indiv.to_string().contains("NOP"));
+        assert!(indiv.instructions.len() == DLX_INDIV_MAX_SIZE);
+    }
+
+    #[test]
+    fn test_dlx_last_index() {
+        let indiv = Individual::parse(RAW_INSTRUCTIONS);
+        assert_eq!(indiv.first_nop_index(), 28);
+
+        let indiv2 = Individual::generate();
+        assert_eq!(indiv2.first_nop_index(), 0);
+    }
+
+    #[test]
+    fn test_dlx_rand_instruction() {
+        let mut indiv = Individual::generate();
+        for _ in 0..10 {
+            indiv.add_rand_instruction();
+        }
+
+        print!("{}", indiv);
+
+        assert_eq!(indiv.first_nop_index(), 10);
+        assert_eq!(indiv.instructions.len(), DLX_INDIV_MAX_SIZE);
+    }
+
+    #[test]
+    fn test_dlx_rand_instruction_over_limit() {
+        let mut indiv = Individual::generate();
+        for _ in 0..(DLX_INDIV_MAX_SIZE + 10) {
+            indiv.add_rand_instruction();
+        }
+
+        print!("{}", indiv);
+
+        assert_eq!(indiv.first_nop_index(), DLX_INDIV_MAX_SIZE);
+        assert_eq!(indiv.instructions.len(), DLX_INDIV_MAX_SIZE);
     }
 }

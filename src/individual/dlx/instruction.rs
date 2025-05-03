@@ -1,9 +1,14 @@
 use core::panic;
+use rand::Rng;
+use rand::rngs::ThreadRng;
 use regex::Regex;
 use std::fmt;
 
 use super::Opcode;
 use super::Register;
+
+pub const MAX_REGISTER_FOR_RAND: usize = 10;
+pub const MAX_IMMEDIATE_FOR_RAND: i32 = 200;
 
 #[derive(Debug, Clone)]
 pub struct Instruction {
@@ -13,6 +18,56 @@ pub struct Instruction {
 }
 
 impl Instruction {
+    pub fn get_opcode(&self) -> &Opcode {
+        &self.opcode
+    }
+
+    pub fn get_immidiate(&self) -> i32 {
+        self.immidiate
+    }
+
+    pub fn get_rand() -> Self {
+        let r_opcode = Opcode::rand();
+
+        let r_regs = vec![
+            Register::rand_up_to(MAX_REGISTER_FOR_RAND).unwrap(),
+            Register::rand_up_to(MAX_REGISTER_FOR_RAND).unwrap(),
+            Register::rand_up_to(MAX_REGISTER_FOR_RAND).unwrap(),
+            Register::rand_up_to(MAX_REGISTER_FOR_RAND).unwrap(),
+            Register::rand_up_to(MAX_REGISTER_FOR_RAND).unwrap(),
+        ];
+
+        let mut rng = rand::rng();
+
+        let r_imm = rng.random_range(-MAX_IMMEDIATE_FOR_RAND..MAX_IMMEDIATE_FOR_RAND) * 4;
+
+        Instruction {
+            opcode: r_opcode,
+            registers: r_regs,
+            immidiate: r_imm,
+        }
+    }
+
+    /// Sets a register to a selected or random register
+    ///
+    /// ## Arguments
+    /// * `pos` - The position of the register to set. If None, a random register will be set.
+    /// * `reg` - The register to set.
+    pub fn set_register(&mut self, pos: Option<usize>, reg: Register) {
+        match pos {
+            Some(p) => self.registers[p] = reg,
+            None => {
+                let mut rng = rand::rng();
+                let reg_index = rng.random_range(0..self.registers.len());
+                self.registers[reg_index] = reg;
+            }
+        }
+    }
+
+    pub fn set_immidiate(&mut self, imm: i32) {
+        self.immidiate = imm;
+    }
+
     fn format_instr(&self) -> String {
         // String starting with opcode
         let mut output_str = self.opcode.to_string().clone();
