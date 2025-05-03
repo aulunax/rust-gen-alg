@@ -15,10 +15,12 @@ pub struct FitnessIndiv<T: Genetic + Clone> {
 }
 
 impl<T: Genetic + Clone> FitnessIndiv<T> {
+    /// Getter for fitness
     pub fn fitness(&self) -> f32 {
         self.fitness
     }
 
+    /// Getter for object
     pub fn obj(&self) -> &T {
         &self.obj
     }

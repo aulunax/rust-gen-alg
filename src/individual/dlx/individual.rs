@@ -1,3 +1,4 @@
+use std::cmp;
 use std::fmt;
 
 use rand::{
@@ -52,14 +53,14 @@ impl Individual {
     }
 
     fn change_rand_instruction(&mut self) -> () {
-        let last_pos = self.first_nop_index();
+        let last_pos = cmp::min(self.first_nop_index(), DLX_INDIV_MAX_SIZE - 1);
 
-        if last_pos >= DLX_INDIV_MAX_SIZE {
+        // Do nothing if only NOPs instructions
+        if last_pos == 0 {
             return;
         }
 
         let mut rng = rand::rng();
-
         let position = rng.random_range(0..last_pos);
 
         let instr = dlx::Instruction::get_rand();
@@ -68,7 +69,13 @@ impl Individual {
     }
 
     fn change_operands(&mut self) -> () {
-        let last_pos = self.first_nop_index();
+        let last_pos = cmp::min(self.first_nop_index(), DLX_INDIV_MAX_SIZE - 1);
+
+        // Do nothing if only NOPs instructions
+        if last_pos == 0 {
+            return;
+        }
+
         let mut rng = rand::rng();
         let rand_index = rng.random_range(0..last_pos);
 
@@ -119,7 +126,7 @@ impl Individual {
 
 impl Genetic for Individual {
     fn fitness(&self) -> f32 {
-        1.0
+        1.0 + self.first_nop_index() as f32
     }
 
     fn generate() -> Self {
@@ -133,11 +140,15 @@ impl Genetic for Individual {
         let first_half = self.instructions.split_at(mid_instr).0;
         let second_half = other.instructions.split_at(mid_instr_other).1;
 
-        let child: Vec<_> = first_half
+        let mut child: Vec<_> = first_half
             .iter()
             .chain(second_half.iter())
             .cloned()
             .collect();
+
+        if child.len() > DLX_INDIV_MAX_SIZE {
+            child.truncate(DLX_INDIV_MAX_SIZE);
+        }
 
         Individual {
             instructions: child,
@@ -145,8 +156,22 @@ impl Genetic for Individual {
     }
 
     fn mutate(&mut self) -> () {
+        let mut new_instr_chance = 5;
+        let mut change_operands_chance = 50;
+        let mut change_instruction_chance = 20;
+
+        if self.instructions.len() == 0 {
+            new_instr_chance = 1000;
+            change_operands_chance = 0;
+            change_instruction_chance = 0;
+        }
+
         let choices = [0, 1, 2];
-        let weights = [5, 50, 10];
+        let weights = [
+            new_instr_chance,
+            change_operands_chance,
+            change_instruction_chance,
+        ];
         let dist = WeightedIndex::new(&weights).unwrap();
 
         let mut rng = rand::rng();
@@ -310,6 +335,22 @@ BRLT R8, 0x0008"#;
     }
 
     #[test]
+    fn test_dlx_change_operands_when_none() {
+        let indiv = Individual::default();
+        let mut indiv_changed = Individual::default();
+
+        for _ in 0..(DLX_INDIV_MAX_SIZE + 10) {
+            indiv_changed.change_operands();
+        }
+
+        print!("{}\n", indiv);
+        print!("{}\n", indiv_changed);
+
+        assert_eq!(indiv_changed.first_nop_index(), 0);
+        assert_eq!(indiv_changed.instructions.len(), DLX_INDIV_MAX_SIZE);
+    }
+
+    #[test]
     fn test_dlx_change_instructions() {
         let indiv = Individual::parse(RAW_INSTRUCTIONS);
         let mut indiv_changed = Individual::parse(RAW_INSTRUCTIONS);
@@ -322,6 +363,22 @@ BRLT R8, 0x0008"#;
         print!("{}\n", indiv_changed);
 
         assert_eq!(indiv_changed.first_nop_index(), RAW_INSTRUCTIONS_LEN);
+        assert_eq!(indiv_changed.instructions.len(), DLX_INDIV_MAX_SIZE);
+    }
+
+    #[test]
+    fn test_dlx_change_instructions_when_none() {
+        let indiv = Individual::default();
+        let mut indiv_changed = Individual::default();
+
+        for _ in 0..(DLX_INDIV_MAX_SIZE + 10) {
+            indiv_changed.change_rand_instruction();
+        }
+
+        print!("{}\n", indiv);
+        print!("{}\n", indiv_changed);
+
+        assert_eq!(indiv_changed.first_nop_index(), 0);
         assert_eq!(indiv_changed.instructions.len(), DLX_INDIV_MAX_SIZE);
     }
 

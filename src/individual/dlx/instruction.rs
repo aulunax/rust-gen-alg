@@ -52,6 +52,10 @@ impl Instruction {
     /// * `pos` - The position of the register to set. If None, a random register will be set.
     /// * `reg` - The register to set.
     pub fn set_register(&mut self, pos: Option<usize>, reg: Register) {
+        if self.registers.len() == 0 {
+            return;
+        }
+
         match pos {
             Some(p) => self.registers[p] = reg,
             None => {
