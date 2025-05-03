@@ -60,7 +60,7 @@ impl Individual {
 
         let mut rng = rand::rng();
 
-        let position = rng.random_range(0..=last_pos);
+        let position = rng.random_range(0..last_pos);
 
         let instr = dlx::Instruction::get_rand();
 
@@ -127,12 +127,26 @@ impl Genetic for Individual {
     }
 
     fn crossover(&self, other: &Self) -> Self {
-        todo!()
+        let mid_instr = self.first_nop_index() / 2;
+        let mid_instr_other = other.first_nop_index() / 2;
+
+        let first_half = self.instructions.split_at(mid_instr).0;
+        let second_half = other.instructions.split_at(mid_instr_other).1;
+
+        let child: Vec<_> = first_half
+            .iter()
+            .chain(second_half.iter())
+            .cloned()
+            .collect();
+
+        Individual {
+            instructions: child,
+        }
     }
 
     fn mutate(&mut self) -> () {
-        let choices = [0, 1, 2, 3];
-        let weights = [10, 50, 0, 0];
+        let choices = [0, 1, 2];
+        let weights = [5, 50, 10];
         let dist = WeightedIndex::new(&weights).unwrap();
 
         let mut rng = rand::rng();
@@ -232,6 +246,8 @@ ADDI R0, 0x0080, R8
 SUB R1, R8, R8
 BRLT R8, 0x0008"#;
 
+    const RAW_INSTRUCTIONS_LEN: usize = 28;
+
     #[test]
     fn test_dlx_indiv_parse() {
         let indiv = Individual::parse(RAW_INSTRUCTIONS);
@@ -258,7 +274,7 @@ BRLT R8, 0x0008"#;
     #[test]
     fn test_dlx_last_index() {
         let indiv = Individual::parse(RAW_INSTRUCTIONS);
-        assert_eq!(indiv.first_nop_index(), 28);
+        assert_eq!(indiv.first_nop_index(), RAW_INSTRUCTIONS_LEN);
 
         let indiv2 = Individual::generate();
         assert_eq!(indiv2.first_nop_index(), 0);
@@ -275,6 +291,38 @@ BRLT R8, 0x0008"#;
 
         assert_eq!(indiv.first_nop_index(), 10);
         assert_eq!(indiv.instructions.len(), DLX_INDIV_MAX_SIZE);
+    }
+
+    #[test]
+    fn test_dlx_change_operands() {
+        let indiv = Individual::parse(RAW_INSTRUCTIONS);
+        let mut indiv_changed = Individual::parse(RAW_INSTRUCTIONS);
+
+        for _ in 0..(DLX_INDIV_MAX_SIZE + 10) {
+            indiv_changed.change_operands();
+        }
+
+        print!("{}\n", indiv);
+        print!("{}\n", indiv_changed);
+
+        assert_eq!(indiv_changed.first_nop_index(), RAW_INSTRUCTIONS_LEN);
+        assert_eq!(indiv_changed.instructions.len(), DLX_INDIV_MAX_SIZE);
+    }
+
+    #[test]
+    fn test_dlx_change_instructions() {
+        let indiv = Individual::parse(RAW_INSTRUCTIONS);
+        let mut indiv_changed = Individual::parse(RAW_INSTRUCTIONS);
+
+        for _ in 0..(DLX_INDIV_MAX_SIZE + 10) {
+            indiv_changed.change_rand_instruction();
+        }
+
+        print!("{}\n", indiv);
+        print!("{}\n", indiv_changed);
+
+        assert_eq!(indiv_changed.first_nop_index(), RAW_INSTRUCTIONS_LEN);
+        assert_eq!(indiv_changed.instructions.len(), DLX_INDIV_MAX_SIZE);
     }
 
     #[test]

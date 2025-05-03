@@ -33,8 +33,6 @@ impl Instruction {
             Register::rand_up_to(MAX_REGISTER_FOR_RAND).unwrap(),
             Register::rand_up_to(MAX_REGISTER_FOR_RAND).unwrap(),
             Register::rand_up_to(MAX_REGISTER_FOR_RAND).unwrap(),
-            Register::rand_up_to(MAX_REGISTER_FOR_RAND).unwrap(),
-            Register::rand_up_to(MAX_REGISTER_FOR_RAND).unwrap(),
         ];
 
         let mut rng = rand::rng();
