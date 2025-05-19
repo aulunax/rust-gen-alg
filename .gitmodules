@@ -1,0 +1,3 @@
+[submodule "src/emulator"]
+	path = src/emulator
+	url = https://github.com/aulunax/Simple-Asm-Emulator
