@@ -3,7 +3,7 @@ use std::fmt;
 use rand::Rng;
 
 /// Represents the registers in the DLX architecture.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[repr(i8)]
 pub enum Register {
     R0 = 0,

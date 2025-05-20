@@ -3,18 +3,17 @@ use std::error::Error;
 use crate::individual::genetic::Genetic;
 use rand::{Rng, seq::IndexedRandom};
 use rayon::prelude::*;
-use roulette_wheel::RouletteWheel;
 
 /// Individual that is put in genetic algorithm.
 ///
 /// Implements Genetic trait, which allows it to be used as proper population individual
 #[derive(Clone, Debug)]
-pub struct FitnessIndiv<T: Genetic + Clone + Send + Sync> {
+pub struct FitnessIndiv<T: Genetic + Clone + Send + Sync + PartialEq + Eq> {
     obj: T,
     fitness: f32,
 }
 
-impl<T: Genetic + Clone + Send + Sync> FitnessIndiv<T> {
+impl<T: Genetic + Clone + Send + Sync + PartialEq + Eq> FitnessIndiv<T> {
     /// Getter for fitness
     pub fn fitness(&self) -> f32 {
         self.fitness
@@ -38,14 +37,26 @@ impl<T: Genetic + Clone + Send + Sync> FitnessIndiv<T> {
 }
 
 /// Genetic Algorithm struct
-pub struct GenAlg<T: Genetic + Clone + Send + Sync> {
+pub struct GenAlg<T: Genetic + Clone + Send + Sync + PartialEq + Eq> {
     population_history: Vec<Vec<FitnessIndiv<T>>>,
     current_population: Vec<FitnessIndiv<T>>,
     current_generation: usize,
     best_individual: Option<FitnessIndiv<T>>,
+    cache: Vec<T>,
 }
 
-impl<T: Genetic + Clone + Send + Sync> GenAlg<T> {
+impl<T: Genetic + Clone + Send + Sync + PartialEq + Eq> GenAlg<T> {
+    fn check_cache(&self, ind: &T) -> Option<f32> {
+        if self.cache.is_empty() {
+            return None;
+        }
+
+        self.cache
+            .iter()
+            .find(|&indiv| indiv == ind)
+            .map(|indiv| indiv.fitness())
+    }
+
     /// Updates self.best_individual to the best individual in the current population
     fn try_update_best_individual(&mut self) -> () {
         if let None = self.best_individual {
@@ -104,8 +115,6 @@ impl<T: Genetic + Clone + Send + Sync> GenAlg<T> {
             "selection_rate too small. selection_rate should be large enough, to select at least 2 individuals."
         );
 
-        let mut rng = rand::rng();
-
         let population_size = self.current_population.len();
 
         // sort population by fitness
@@ -147,7 +156,17 @@ impl<T: Genetic + Clone + Send + Sync> GenAlg<T> {
                 .map_init(rand::rng, |rng, _| {
                     let parents = parents_pool.choose_multiple(rng, 2).collect::<Vec<_>>();
                     let child = parents[0].obj.crossover(&parents[1].obj);
+
                     FitnessIndiv::new(&child)
+                    // let cached_fitness = self.check_cache(&child);
+
+                    // match cached_fitness {
+                    //     Some(fitness) => FitnessIndiv {
+                    //         obj: child,
+                    //         fitness: fitness,
+                    //     },
+                    //     None => FitnessIndiv::new(&child),
+                    // }
                 })
                 .collect();
 
@@ -159,11 +178,14 @@ impl<T: Genetic + Clone + Send + Sync> GenAlg<T> {
                     self.current_population
                         .as_mut_slice()
                         .par_iter_mut()
-                        .for_each(|indiv| {
-                            let mut rng = rand::rng();
-                            if rng.random::<f32>() < mutation_rate {
-                                indiv.obj.mutate();
-                                indiv.fitness = indiv.obj.fitness();
+                        .enumerate()
+                        .for_each(|(i, indiv)| {
+                            if i >= elite_count {
+                                let mut rng = rand::rng(); // replace with correct random generator
+                                if rng.random::<f32>() < mutation_rate {
+                                    indiv.obj.mutate();
+                                    indiv.fitness = indiv.obj.fitness();
+                                }
                             }
                         });
                 }
@@ -204,6 +226,7 @@ impl<T: Genetic + Clone + Send + Sync> GenAlg<T> {
             current_population: start_population,
             current_generation: 0,
             best_individual: None,
+            cache: Vec::new(),
         }
     }
 
@@ -230,7 +253,7 @@ mod tests {
 
     const MAX_RAND: i32 = 1000;
 
-    #[derive(Clone, Debug, PartialEq)]
+    #[derive(Clone, Debug, PartialEq, Eq)]
     struct DummyGenetic {
         a: i32,
         b: i32,

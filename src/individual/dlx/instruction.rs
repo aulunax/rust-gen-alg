@@ -1,7 +1,5 @@
 use core::panic;
 use rand::Rng;
-use rand::rngs::ThreadRng;
-use rayon::iter::split;
 use regex::Regex;
 use std::fmt;
 
@@ -11,7 +9,7 @@ use super::Register;
 pub const MAX_REGISTER_FOR_RAND: usize = 10;
 pub const MAX_IMMEDIATE_FOR_RAND: i32 = 200;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Instruction {
     opcode: Opcode,
     registers: Vec<Register>,

@@ -1,10 +1,9 @@
-use std::path::Path;
 use std::process::Command;
 
-use rayon::iter::split;
+use cached::proc_macro::cached;
 use regex::Regex;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EmulatorResult {
     pub success: bool,
     pub cycle_count: usize,
@@ -12,84 +11,80 @@ pub struct EmulatorResult {
     pub memory: Option<Vec<u32>>,
 }
 
-pub struct Emulator;
+#[cached(size = 300)]
+pub fn run_python_emulator(code: String) -> EmulatorResult {
+    let output = Command::new("python3")
+        .args(&["-B", "-u", "interface.py"])
+        .args(&["--instr", &code])
+        .args(&["--timeout", "20000"])
+        .current_dir("src/emulator")
+        .output()
+        .expect("Failed to start python process");
 
-impl Emulator {
-    pub fn run_python_emulator(code: &str) -> EmulatorResult {
-        let output = Command::new("python3")
-            .args(&["-B", "-u", "interface.py"])
-            .args(&["--instr", code])
-            .args(&["--timeout", "15000"])
-            .current_dir("src/emulator")
-            .output()
-            .expect("Failed to start python process");
-
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            println!("{:?}", stdout);
-            Emulator::parse_emu_output(&stdout)
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            eprintln!("Python raised an error:\n{}", stderr);
-            EmulatorResult {
-                success: false,
-                cycle_count: 0,
-                unknown: false,
-                memory: None,
-            }
-        }
-    }
-
-    fn compress_spaces(s: &str) -> String {
-        let re = Regex::new(r" +").unwrap();
-        re.replace_all(s, " ").to_string()
-    }
-
-    fn parse_emu_output(output: &str) -> EmulatorResult {
-        let split_output: Vec<&str> = output.splitn(4, '\n').collect();
-
-        let success = split_output.get(0) == Some(&"Completed");
-
-        if !success {
-            return EmulatorResult {
-                success: success,
-                cycle_count: 0,
-                unknown: true,
-                memory: None,
-            };
-        }
-
-        let cycles: usize = split_output
-            .get(1)
-            .unwrap()
-            .trim()
-            .parse::<usize>()
-            .expect("Invalid cycle count format. Not a valid number.");
-
-        let unknown = split_output.get(2) == Some(&"True");
-
-        if split_output.get(3) == None {
-            return EmulatorResult {
-                success: success,
-                cycle_count: cycles,
-                unknown: unknown,
-                memory: None,
-            };
-        }
-
-        let memory_string = Emulator::compress_spaces(split_output[3]);
-        let memory_hex = memory_string.split_terminator(&[' ', '\n'][..]);
-
-        let memory = memory_hex
-            .map(|hex| u32::from_str_radix(hex, 16).unwrap())
-            .collect();
-
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        parse_emu_output(&stdout)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("Python raised an error:\n{}", stderr);
         EmulatorResult {
+            success: false,
+            cycle_count: 0,
+            unknown: false,
+            memory: None,
+        }
+    }
+}
+
+fn compress_spaces(s: &str) -> String {
+    let re = Regex::new(r" +").unwrap();
+    re.replace_all(s, " ").to_string()
+}
+
+fn parse_emu_output(output: &str) -> EmulatorResult {
+    let split_output: Vec<&str> = output.splitn(4, '\n').collect();
+
+    let success = split_output.get(0) == Some(&"Completed");
+
+    if !success {
+        return EmulatorResult {
+            success: success,
+            cycle_count: 0,
+            unknown: true,
+            memory: None,
+        };
+    }
+
+    let cycles: usize = split_output
+        .get(1)
+        .unwrap()
+        .trim()
+        .parse::<usize>()
+        .expect("Invalid cycle count format. Not a valid number.");
+
+    let unknown = split_output.get(2) == Some(&"True");
+
+    if split_output.get(3) == None {
+        return EmulatorResult {
             success: success,
             cycle_count: cycles,
             unknown: unknown,
-            memory: Some(memory),
-        }
+            memory: None,
+        };
+    }
+
+    let memory_string = compress_spaces(split_output[3]);
+    let memory_hex = memory_string.split_terminator(&[' ', '\n'][..]);
+
+    let memory = memory_hex
+        .map(|hex| u32::from_str_radix(hex, 16).unwrap())
+        .collect();
+
+    EmulatorResult {
+        success: success,
+        cycle_count: cycles,
+        unknown: unknown,
+        memory: Some(memory),
     }
 }
 
@@ -118,7 +113,7 @@ mod test {
 
     #[test]
     fn emu_test() {
-        let result = Emulator::run_python_emulator(SOI_CODE);
+        let result = run_python_emulator(SOI_CODE.to_string());
         println!("{:?}", result);
 
         assert!(result.success);
@@ -135,7 +130,7 @@ mod test {
         let codes: Vec<&str> = vec![SOI_CODE; RUN_COUNT];
 
         codes.par_iter().for_each(|code| {
-            Emulator::run_python_emulator(code);
+            run_python_emulator(code.to_string());
         });
     }
 }

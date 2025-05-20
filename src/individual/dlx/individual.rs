@@ -4,30 +4,28 @@ use std::fmt;
 use rand::{
     Rng,
     distr::{Distribution, weighted::WeightedIndex},
-    random, random_range, rng,
+    random,
 };
 
 use crate::individual::{dlx, genetic::Genetic};
 
-use super::emu::Emulator;
+use super::emu;
 use super::opcode::BRANCH_OPCODES;
 use super::{
     Opcode, Register,
-    instruction::{self, MAX_IMMEDIATE_FOR_RAND, MAX_REGISTER_FOR_RAND},
+    instruction::{MAX_IMMEDIATE_FOR_RAND, MAX_REGISTER_FOR_RAND},
 };
 
-const DLX_INDIV_MAX_SIZE: usize = 50;
+const DLX_INDIV_MAX_SIZE: usize = 90;
 
-const SOI_ALG_START: &str = "ADDI R0, 0x00000010, R12\nADDI R0, 0x00000020, R11\nAND R1, R0, R1\nMULI R12, 0x00000004, R12\nAND R4, R0, R4\nMULI R11, 0x00000004, R11\nSUBI R12, 0x00000004, R13\nLDW R7, 0x00000200(R1)\nADD R4, R0, R5\nSUBI R13, 0x00000004, R17\nl1: AND R2, R0, R2\nAND R3, R0, R3\nSTW R7, 0x00000280(R4)\nLDW R9, 0x00000280(R5)\nLDW R10, 0x000002C0(R2)\nl2: SUB R5, R17, R14\nADD R3, R9, R3\nADDI R2, 0x00000004, R2\nBRLE R14, h1\nSUB R2, R12, R15\nADDI R5, 0x00000004, R5\nAND R5, R0, R5\nh1: MUL R3, R10, R3\nBRNZ R15, l2\nLDW R9, 0x00000280(R5)\nLDW R10, 0x000002C0(R2)\nSTW R3, 0x00000300(R1)\nSUBI R4, 0x00000004, R4\nADDI R1, 0x00000004, R1\nNOP\nBRGE R4, h2\nSUB R1, R11, R15\nNOP\nADD R13, R0, R4\nh2: NOP\nBRNZ R15, l1\nLDW R7, 0x00000200(R1)\nADD R4, R0, R5";
-
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct Label {
     name: String,
     location: usize,
 }
 
 /// Individual for the DLX algorithm
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Individual {
     instructions: Vec<dlx::Instruction>,
     labels: Vec<Label>,
@@ -37,20 +35,51 @@ unsafe impl Sync for Individual {}
 unsafe impl Send for Individual {}
 
 impl Individual {
-    fn first_nop_index(&self) -> usize {
-        let index = self
-            .instructions
-            .iter()
-            .position(|a| a.get_opcode() == &Opcode::NOP);
+    fn last_nop_index(&self) -> usize {
+        // let index = self
+        //     .instructions
+        //     .iter()
+        //     .position(|a| a.get_opcode() == &Opcode::NOP);
 
-        match index {
-            Some(n) => n,
-            None => DLX_INDIV_MAX_SIZE,
-        }
+        // match index {
+        //     Some(n) => n,
+        //     None => DLX_INDIV_MAX_SIZE,
+        // }
+
+        self.instructions
+            .iter()
+            .rposition(|a| a.get_opcode() != &Opcode::NOP)
+            .unwrap_or(0)
     }
 
-    fn swap_rand_instruction(&mut self) -> () {
-        let last_pos = cmp::min(self.first_nop_index(), DLX_INDIV_MAX_SIZE - 1);
+    fn duplicate_rand_instruction(&mut self) -> () {
+        let last_pos = cmp::min(self.last_nop_index(), DLX_INDIV_MAX_SIZE - 1);
+
+        if last_pos == 0 {
+            return;
+        }
+
+        let mut rng = rand::rng();
+        let position = rng.random_range(0..last_pos);
+
+        let instr = self.instructions[position].clone();
+
+        if BRANCH_OPCODES.contains(&instr.get_opcode()) {
+            return;
+        }
+
+        // Make labels with location higher than position, higher by 1
+        for label in self.labels.iter_mut() {
+            if label.location > position {
+                label.location += 1;
+            }
+        }
+
+        self.instructions.insert(position, instr);
+    }
+
+    fn move_rand_instruction(&mut self) -> () {
+        let last_pos = cmp::min(self.last_nop_index(), DLX_INDIV_MAX_SIZE - 1);
 
         if last_pos == 0 {
             return;
@@ -60,11 +89,24 @@ impl Individual {
         let position = rng.random_range(0..last_pos);
         let position2 = rng.random_range(0..last_pos);
 
-
         let instr = self.instructions[position].clone();
 
         if BRANCH_OPCODES.contains(&instr.get_opcode()) {
             return;
+        }
+
+        // Make labels with location higher than position, lower by 1
+        for label in self.labels.iter_mut() {
+            if label.location > position {
+                label.location -= 1;
+            }
+        }
+
+        // Make labels with location higher than position2, higher by 1
+        for label in self.labels.iter_mut() {
+            if label.location > position2 {
+                label.location += 1;
+            }
         }
 
         self.instructions.remove(position);
@@ -72,26 +114,45 @@ impl Individual {
     }
 
     fn remove_rand_instruction(&mut self) -> () {
-        let last_pos = cmp::min(self.first_nop_index(), DLX_INDIV_MAX_SIZE - 1);
+        let last_pos = cmp::min(self.last_nop_index(), DLX_INDIV_MAX_SIZE - 1);
 
         if last_pos == 0 {
             return;
         }
 
         let mut rng = rand::rng();
-        let position = rng.random_range(0..last_pos);
+        let mut position: usize = rng.random_range(0..last_pos);
 
-        let instr = &self.instructions[position];
+        for i in 0..=5 {
+            if i == 5 {
+                return;
+            }
 
-        if BRANCH_OPCODES.contains(&instr.get_opcode()) {
-            return;
+            position = rng.random_range(0..last_pos);
+            let instr = &self.instructions[position];
+
+            if BRANCH_OPCODES.contains(&instr.get_opcode()) {
+                continue;
+            }
+
+            if instr.get_opcode() == &Opcode::NOP {
+                break;
+            }
         }
 
-        self.instructions[position] = dlx::Instruction::default();
+        // Make labels with location higher than position, lower by 1
+        for label in self.labels.iter_mut() {
+            if label.location > position {
+                label.location -= 1;
+            }
+        }
+
+        self.instructions.remove(position);
+        self.instructions.push(dlx::Instruction::default());
     }
 
     fn add_rand_instruction(&mut self) -> () {
-        let last_pos = self.first_nop_index();
+        let last_pos = self.last_nop_index();
 
         if last_pos >= DLX_INDIV_MAX_SIZE {
             return;
@@ -103,12 +164,19 @@ impl Individual {
 
         let instr = dlx::Instruction::get_rand();
 
+        // Make labels with location higher than position, higher by 1
+        for label in self.labels.iter_mut() {
+            if label.location > position {
+                label.location += 1;
+            }
+        }
+
         self.instructions.insert(position, instr);
         self.instructions.pop();
     }
 
     fn change_rand_instruction(&mut self) -> () {
-        let last_pos = cmp::min(self.first_nop_index(), DLX_INDIV_MAX_SIZE - 1);
+        let last_pos = cmp::min(self.last_nop_index(), DLX_INDIV_MAX_SIZE - 1);
 
         // Do nothing if only NOPs instructions
         if last_pos == 0 {
@@ -124,7 +192,7 @@ impl Individual {
     }
 
     fn change_operands(&mut self) -> () {
-        let last_pos = cmp::min(self.first_nop_index(), DLX_INDIV_MAX_SIZE - 1);
+        let last_pos = cmp::min(self.last_nop_index(), DLX_INDIV_MAX_SIZE - 1);
 
         // Do nothing if only NOPs instructions
         if last_pos == 0 {
@@ -162,21 +230,21 @@ impl Individual {
         self.instructions[index].set_immidiate(imm);
     }
 
-    fn get_inner_loop_bounds(&self) -> (usize, usize) {
-        (0, self.instructions.len() - 1)
-    }
+    // fn get_inner_loop_bounds(&self) -> (usize, usize) {
+    //     (0, self.instructions.len() - 1)
+    // }
 
-    fn get_setup_part_bounds(&self) -> (usize, usize) {
-        (0, self.instructions.len() - 1)
-    }
+    // fn get_setup_part_bounds(&self) -> (usize, usize) {
+    //     (0, self.instructions.len() - 1)
+    // }
 
-    fn get_outer_loop_top_part_bounds(&self) -> (usize, usize) {
-        (0, self.instructions.len() - 1)
-    }
+    // fn get_outer_loop_top_part_bounds(&self) -> (usize, usize) {
+    //     (0, self.instructions.len() - 1)
+    // }
 
-    fn get_outer_loop_bottom_part_bounds(&self) -> (usize, usize) {
-        (0, self.instructions.len() - 1)
-    }
+    // fn get_outer_loop_bottom_part_bounds(&self) -> (usize, usize) {
+    //     (0, self.instructions.len() - 1)
+    // }
 }
 
 #[rustfmt::skip]
@@ -193,14 +261,13 @@ const MEMORY_OUTPUT_ADDR_END: usize = MEMORY_OUTPUT_ADDR + MEMORY_OUTPUT_SIZE;
 
 impl Genetic for Individual {
     fn fitness(&self) -> f32 {
-        let result = Emulator::run_python_emulator(&self.to_string());
-
+        let result = emu::run_python_emulator(self.to_string());
 
         if !result.success {
             return 0.0;
         }
 
-        if result.cycle_count > 10000 {
+        if result.cycle_count > 20000 {
             return 0.0;
         }
 
@@ -210,7 +277,7 @@ impl Genetic for Individual {
             return 1.0;
         }
 
-        (10000 - result.cycle_count) as f32
+        (20000 - result.cycle_count) as f32
     }
 
     fn generate() -> Self {
@@ -218,8 +285,8 @@ impl Genetic for Individual {
     }
 
     fn crossover(&self, other: &Self) -> Self {
-        let mid_instr = self.first_nop_index() / 2;
-        let mid_instr_other = other.first_nop_index() / 2;
+        let mid_instr = self.last_nop_index() / 2;
+        let mid_instr_other = other.last_nop_index() / 2;
 
         let first_half = self.instructions.split_at(mid_instr).0;
         let second_half = other.instructions.split_at(mid_instr_other).1;
@@ -241,11 +308,12 @@ impl Genetic for Individual {
     }
 
     fn mutate(&mut self) -> () {
-        let mut new_instr_chance = 10;
-        let mut change_operands_chance = 20;
-        let mut change_instruction_chance = 20;
-        let mut remove_instr_chance = 5;
+        let mut new_instr_chance = 0;
+        let mut change_operands_chance = 0;
+        let mut change_instruction_chance = 0;
+        let mut remove_instr_chance = 50;
         let mut swap_instr_chance = 50;
+        let mut duplicate_instr_chance = 10;
 
         if self.instructions.len() == 0 {
             new_instr_chance = 1000;
@@ -253,15 +321,17 @@ impl Genetic for Individual {
             change_instruction_chance = 0;
             remove_instr_chance = 0;
             swap_instr_chance = 0;
+            duplicate_instr_chance = 0;
         }
 
-        let choices = [0, 1, 2, 3, 4];
+        let choices = [0, 1, 2, 3, 4, 5];
         let weights = [
             new_instr_chance,
             change_operands_chance,
             change_instruction_chance,
             remove_instr_chance,
             swap_instr_chance,
+            duplicate_instr_chance,
         ];
         let dist = WeightedIndex::new(&weights).unwrap();
 
@@ -271,7 +341,8 @@ impl Genetic for Individual {
             1 => self.change_operands(),
             2 => self.change_rand_instruction(),
             3 => self.remove_rand_instruction(),
-            4 => self.swap_rand_instruction(),
+            4 => self.move_rand_instruction(),
+            5 => self.duplicate_rand_instruction(),
             _ => unreachable!(),
         }
     }
@@ -416,10 +487,10 @@ BRLT R8, 0x00000008"#;
     #[test]
     fn test_dlx_last_index() {
         let indiv = Individual::parse(RAW_INSTRUCTIONS);
-        assert_eq!(indiv.first_nop_index(), RAW_INSTRUCTIONS_LEN);
+        assert_eq!(indiv.last_nop_index(), RAW_INSTRUCTIONS_LEN);
 
         let indiv2 = Individual::generate();
-        assert_eq!(indiv2.first_nop_index(), 0);
+        assert_eq!(indiv2.last_nop_index(), 0);
     }
 
     #[test]
@@ -431,7 +502,7 @@ BRLT R8, 0x00000008"#;
 
         print!("{}", indiv);
 
-        assert_eq!(indiv.first_nop_index(), 10);
+        assert_eq!(indiv.last_nop_index(), 10);
         assert_eq!(indiv.instructions.len(), DLX_INDIV_MAX_SIZE);
     }
 
@@ -447,7 +518,7 @@ BRLT R8, 0x00000008"#;
         print!("{}\n", indiv);
         print!("{}\n", indiv_changed);
 
-        assert_eq!(indiv_changed.first_nop_index(), RAW_INSTRUCTIONS_LEN);
+        assert_eq!(indiv_changed.last_nop_index(), RAW_INSTRUCTIONS_LEN);
         assert_eq!(indiv_changed.instructions.len(), DLX_INDIV_MAX_SIZE);
     }
 
@@ -463,7 +534,7 @@ BRLT R8, 0x00000008"#;
         print!("{}\n", indiv);
         print!("{}\n", indiv_changed);
 
-        assert_eq!(indiv_changed.first_nop_index(), 0);
+        assert_eq!(indiv_changed.last_nop_index(), 0);
         assert_eq!(indiv_changed.instructions.len(), DLX_INDIV_MAX_SIZE);
     }
 
@@ -479,7 +550,7 @@ BRLT R8, 0x00000008"#;
         print!("{}\n", indiv);
         print!("{}\n", indiv_changed);
 
-        assert_eq!(indiv_changed.first_nop_index(), RAW_INSTRUCTIONS_LEN);
+        assert_eq!(indiv_changed.last_nop_index(), RAW_INSTRUCTIONS_LEN);
         assert_eq!(indiv_changed.instructions.len(), DLX_INDIV_MAX_SIZE);
     }
 
@@ -495,7 +566,7 @@ BRLT R8, 0x00000008"#;
         print!("{}\n", indiv);
         print!("{}\n", indiv_changed);
 
-        assert_eq!(indiv_changed.first_nop_index(), 0);
+        assert_eq!(indiv_changed.last_nop_index(), 0);
         assert_eq!(indiv_changed.instructions.len(), DLX_INDIV_MAX_SIZE);
     }
 
@@ -508,9 +579,11 @@ BRLT R8, 0x00000008"#;
 
         print!("{}", indiv);
 
-        assert_eq!(indiv.first_nop_index(), DLX_INDIV_MAX_SIZE);
+        assert_eq!(indiv.last_nop_index(), DLX_INDIV_MAX_SIZE);
         assert_eq!(indiv.instructions.len(), DLX_INDIV_MAX_SIZE);
     }
+
+    const SOI_ALG_START: &str = "ADDI R0, 0x00000010, R12\nADDI R0, 0x00000020, R11\nAND R1, R0, R1\nMULI R12, 0x00000004, R12\nAND R4, R0, R4\nMULI R11, 0x00000004, R11\nSUBI R12, 0x00000004, R13\nLDW R7, 0x00000200(R1)\nADD R4, R0, R5\nSUBI R13, 0x00000004, R17\nl1: AND R2, R0, R2\nAND R3, R0, R3\nSTW R7, 0x00000280(R4)\nLDW R9, 0x00000280(R5)\nLDW R10, 0x000002C0(R2)\nl2: SUB R5, R17, R14\nADD R3, R9, R3\nADDI R2, 0x00000004, R2\nBRLE R14, h1\nSUB R2, R12, R15\nADDI R5, 0x00000004, R5\nAND R5, R0, R5\nh1: MUL R3, R10, R3\nBRNZ R15, l2\nLDW R9, 0x00000280(R5)\nLDW R10, 0x000002C0(R2)\nSTW R3, 0x00000300(R1)\nSUBI R4, 0x00000004, R4\nADDI R1, 0x00000004, R1\nNOP\nBRGE R4, h2\nSUB R1, R11, R15\nNOP\nADD R13, R0, R4\nh2: NOP\nBRNZ R15, l1\nLDW R7, 0x00000200(R1)\nADD R4, R0, R5";
 
     #[test]
     fn test_dlx_instruction_labels() {

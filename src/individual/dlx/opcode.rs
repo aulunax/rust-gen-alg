@@ -150,7 +150,7 @@ impl Opcode {
     }
 }
 
-fn nop_handler(regs: &mut Vec<&mut Register>, imm: &mut i32) {}
+fn nop_handler(_regs: &mut Vec<&mut Register>, _imm: &mut i32) {}
 
 // Define opcodes here:
 //  Opcode | Byte representation | Type | Format of instruction

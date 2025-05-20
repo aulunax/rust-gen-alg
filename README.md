@@ -15,9 +15,10 @@ WIP
 
 ## TODO:
 - A lot of optimizations
-- Elitism
 - Different crossover patterns
 - Roulette wheel selection
+- Duplicate instruction as mutation
+- Cache for individuals
 
 
 ## Running general tests
