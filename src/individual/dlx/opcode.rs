@@ -117,10 +117,8 @@ macro_rules! define_opcodes {
     };
 }
 
-const ALL_RAND_OPCODES: &[Opcode] = &[
+pub const ALL_RAND_OPCODES: &[Opcode] = &[
     Opcode::ADD,
-    Opcode::LDW,
-    Opcode::STW,
     Opcode::SUB,
     Opcode::MUL,
     Opcode::DIV,
@@ -134,7 +132,15 @@ const ALL_RAND_OPCODES: &[Opcode] = &[
     Opcode::ANDI,
     Opcode::ORI,
     Opcode::XORI,
+];
+
+pub const BRANCH_OPCODES: &[Opcode] = &[
     Opcode::BRZ,
+    Opcode::BRNZ,
+    Opcode::BRGT,
+    Opcode::BRGE,
+    Opcode::BRLT,
+    Opcode::BRLE,
 ];
 
 impl Opcode {

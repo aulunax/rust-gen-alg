@@ -11,7 +11,7 @@ fn test_dlx_gen_alg() {
     let mut gen_alg =
         GenAlg::<Individual>::new(100, Some(&vec![Individual::new(SOI_ALG_START); 10]));
 
-    let best = gen_alg.run_genetic_algorithm(10, 0.5, 0.3, 5).unwrap();
+    let best = gen_alg.run_genetic_algorithm(100, 0.5, 0.3, 5).unwrap();
 
     println!("{}\n Fitness: {}", best.obj(), best.fitness());
     //print!("{:?}\n", gen_alg.population_history());

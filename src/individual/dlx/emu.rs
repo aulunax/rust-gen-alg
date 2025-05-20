@@ -9,7 +9,7 @@ pub struct EmulatorResult {
     pub success: bool,
     pub cycle_count: usize,
     unknown: bool,
-    pub memory: Option<Vec<i32>>,
+    pub memory: Option<Vec<u32>>,
 }
 
 pub struct Emulator;
@@ -26,6 +26,7 @@ impl Emulator {
 
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
+            println!("{:?}", stdout);
             Emulator::parse_emu_output(&stdout)
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -80,7 +81,7 @@ impl Emulator {
         let memory_hex = memory_string.split_terminator(&[' ', '\n'][..]);
 
         let memory = memory_hex
-            .map(|hex| i32::from_str_radix(hex, 16).unwrap())
+            .map(|hex| u32::from_str_radix(hex, 16).unwrap())
             .collect();
 
         EmulatorResult {
@@ -108,7 +109,7 @@ mod test {
     const MEMORY_OUTPUT_ADDR_END: usize = MEMORY_OUTPUT_ADDR + MEMORY_OUTPUT_SIZE;
 
     #[rustfmt::skip]
-    const EXPECTED_MEMORY: [i32; 32] = [
+    const EXPECTED_MEMORY: [u32; 32] = [
         1, 3, 6, 10, 15, 21, 28, 36,
         45, 55, 66, 78, 91, 105, 120, 136,
         152, 168, 184, 200, 216, 232, 248, 264,

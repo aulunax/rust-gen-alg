@@ -10,12 +10,13 @@ use rand::{
 use crate::individual::{dlx, genetic::Genetic};
 
 use super::emu::Emulator;
+use super::opcode::BRANCH_OPCODES;
 use super::{
     Opcode, Register,
     instruction::{self, MAX_IMMEDIATE_FOR_RAND, MAX_REGISTER_FOR_RAND},
 };
 
-const DLX_INDIV_MAX_SIZE: usize = 40;
+const DLX_INDIV_MAX_SIZE: usize = 50;
 
 const SOI_ALG_START: &str = "ADDI R0, 0x00000010, R12\nADDI R0, 0x00000020, R11\nAND R1, R0, R1\nMULI R12, 0x00000004, R12\nAND R4, R0, R4\nMULI R11, 0x00000004, R11\nSUBI R12, 0x00000004, R13\nLDW R7, 0x00000200(R1)\nADD R4, R0, R5\nSUBI R13, 0x00000004, R17\nl1: AND R2, R0, R2\nAND R3, R0, R3\nSTW R7, 0x00000280(R4)\nLDW R9, 0x00000280(R5)\nLDW R10, 0x000002C0(R2)\nl2: SUB R5, R17, R14\nADD R3, R9, R3\nADDI R2, 0x00000004, R2\nBRLE R14, h1\nSUB R2, R12, R15\nADDI R5, 0x00000004, R5\nAND R5, R0, R5\nh1: MUL R3, R10, R3\nBRNZ R15, l2\nLDW R9, 0x00000280(R5)\nLDW R10, 0x000002C0(R2)\nSTW R3, 0x00000300(R1)\nSUBI R4, 0x00000004, R4\nADDI R1, 0x00000004, R1\nNOP\nBRGE R4, h2\nSUB R1, R11, R15\nNOP\nADD R13, R0, R4\nh2: NOP\nBRNZ R15, l1\nLDW R7, 0x00000200(R1)\nADD R4, R0, R5";
 
@@ -46,6 +47,47 @@ impl Individual {
             Some(n) => n,
             None => DLX_INDIV_MAX_SIZE,
         }
+    }
+
+    fn swap_rand_instruction(&mut self) -> () {
+        let last_pos = cmp::min(self.first_nop_index(), DLX_INDIV_MAX_SIZE - 1);
+
+        if last_pos == 0 {
+            return;
+        }
+
+        let mut rng = rand::rng();
+        let position = rng.random_range(0..last_pos);
+        let position2 = rng.random_range(0..last_pos);
+
+
+        let instr = self.instructions[position].clone();
+
+        if BRANCH_OPCODES.contains(&instr.get_opcode()) {
+            return;
+        }
+
+        self.instructions.remove(position);
+        self.instructions.insert(position2, instr);
+    }
+
+    fn remove_rand_instruction(&mut self) -> () {
+        let last_pos = cmp::min(self.first_nop_index(), DLX_INDIV_MAX_SIZE - 1);
+
+        if last_pos == 0 {
+            return;
+        }
+
+        let mut rng = rand::rng();
+        let position = rng.random_range(0..last_pos);
+
+        let instr = &self.instructions[position];
+
+        if BRANCH_OPCODES.contains(&instr.get_opcode()) {
+            return;
+        }
+
+        self.instructions[position] = dlx::Instruction::default();
     }
 
     fn add_rand_instruction(&mut self) -> () {
@@ -138,7 +180,7 @@ impl Individual {
 }
 
 #[rustfmt::skip]
-const EXPECTED_MEMORY: [i32; 32] = [
+const EXPECTED_MEMORY: [u32; 32] = [
     1, 3, 6, 10, 15, 21, 28, 36,
     45, 55, 66, 78, 91, 105, 120, 136,
     152, 168, 184, 200, 216, 232, 248, 264,
@@ -153,7 +195,6 @@ impl Genetic for Individual {
     fn fitness(&self) -> f32 {
         let result = Emulator::run_python_emulator(&self.to_string());
 
-        println!("{:?}", result);
 
         if !result.success {
             return 0.0;
@@ -200,21 +241,27 @@ impl Genetic for Individual {
     }
 
     fn mutate(&mut self) -> () {
-        let mut new_instr_chance = 5;
-        let mut change_operands_chance = 50;
+        let mut new_instr_chance = 10;
+        let mut change_operands_chance = 20;
         let mut change_instruction_chance = 20;
+        let mut remove_instr_chance = 5;
+        let mut swap_instr_chance = 50;
 
         if self.instructions.len() == 0 {
             new_instr_chance = 1000;
             change_operands_chance = 0;
             change_instruction_chance = 0;
+            remove_instr_chance = 0;
+            swap_instr_chance = 0;
         }
 
-        let choices = [0, 1, 2];
+        let choices = [0, 1, 2, 3, 4];
         let weights = [
             new_instr_chance,
             change_operands_chance,
             change_instruction_chance,
+            remove_instr_chance,
+            swap_instr_chance,
         ];
         let dist = WeightedIndex::new(&weights).unwrap();
 
@@ -223,6 +270,8 @@ impl Genetic for Individual {
             0 => self.add_rand_instruction(),
             1 => self.change_operands(),
             2 => self.change_rand_instruction(),
+            3 => self.remove_rand_instruction(),
+            4 => self.swap_rand_instruction(),
             _ => unreachable!(),
         }
     }
