@@ -35,6 +35,14 @@ unsafe impl Sync for Individual {}
 unsafe impl Send for Individual {}
 
 impl Individual {
+    pub fn get_label_position(&self, name: &str) -> Option<usize> {
+        let label = self.labels.iter().find(|l| l.name == name);
+        match label {
+            Some(label) => Some(label.location),
+            None => None,
+        }
+    }
+
     fn last_nop_index(&self) -> usize {
         // let index = self
         //     .instructions
@@ -311,7 +319,7 @@ impl Genetic for Individual {
         let mut new_instr_chance = 0;
         let mut change_operands_chance = 0;
         let mut change_instruction_chance = 0;
-        let mut remove_instr_chance = 50;
+        let mut remove_instr_chance = 30;
         let mut swap_instr_chance = 50;
         let mut duplicate_instr_chance = 10;
 
@@ -336,14 +344,18 @@ impl Genetic for Individual {
         let dist = WeightedIndex::new(&weights).unwrap();
 
         let mut rng = rand::rng();
-        match choices[dist.sample(&mut rng)] {
-            0 => self.add_rand_instruction(),
-            1 => self.change_operands(),
-            2 => self.change_rand_instruction(),
-            3 => self.remove_rand_instruction(),
-            4 => self.move_rand_instruction(),
-            5 => self.duplicate_rand_instruction(),
-            _ => unreachable!(),
+
+        let count = rng.random_range(1..=3);
+        for _ in 0..count {
+            match choices[dist.sample(&mut rng)] {
+                0 => self.add_rand_instruction(),
+                1 => self.change_operands(),
+                2 => self.change_rand_instruction(),
+                3 => self.remove_rand_instruction(),
+                4 => self.move_rand_instruction(),
+                5 => self.duplicate_rand_instruction(),
+                _ => unreachable!(),
+            }
         }
     }
 }
