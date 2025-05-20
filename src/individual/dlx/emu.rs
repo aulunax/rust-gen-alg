@@ -47,7 +47,7 @@ impl Emulator {
     fn parse_emu_output(output: &str) -> EmulatorResult {
         let split_output: Vec<&str> = output.splitn(4, '\n').collect();
 
-        let success = split_output.get(0) == Some(&"Valid");
+        let success = split_output.get(0) == Some(&"Completed");
 
         let cycles: usize = split_output
             .get(1)
@@ -92,12 +92,32 @@ mod test {
 
     const SOI_CODE: &str = "ADDI R0, 0x00000010, R12\nADDI R0, 0x00000020, R11\nAND  R1, R0, R1\nMULI R12, 0x00000004, R12\nAND  R4, R0, R4\nMULI R11, 0x00000004, R11\nSUBI R12, 0x00000004, R13\nLDW  R7, 0x00000200(R1)\nADD  R4, R0, R5\nSUBI R13, 0x00000004, R17\nl1: AND  R2, R0, R2\nAND  R3, R0, R3\nSTW  R7, 0x00000280(R4)\nLDW  R9, 0x00000280(R5)\nLDW  R10, 0x000002C0(R2)\nl2: SUB  R5, R17, R14\nADD  R3, R9, R3\nADDI R2, 0x00000004, R2\nBRLE R14, h1\nSUB  R2, R12, R15\nADDI R5, 0x00000004, R5\nAND  R5, R0, R5\nh1: MUL  R3, R10, R3\nBRNZ R15, l2\nLDW  R9, 0x00000280(R5)\nLDW  R10, 0x000002C0(R2)\nSTW  R3, 0x00000300(R1)\nSUBI R4, 0x00000004, R4\nADDI R1, 0x00000004, R1\nNOP  \nBRGE R4, h2\nSUB  R1, R11, R15\nNOP  \nADD  R13, R0, R4\nh2: NOP  \nBRNZ R15, l1\nLDW  R7, 0x00000200(R1)\nADD  R4, R0, R5";
     const RUN_COUNT: usize = 10;
+    const EXPECTED_CYCLES: usize = 6257;
+
+    const MEMORY_OUTPUT_ADDR: usize = 192;
+    const MEMORY_OUTPUT_SIZE: usize = 32;
+    const MEMORY_OUTPUT_ADDR_END: usize = MEMORY_OUTPUT_ADDR + MEMORY_OUTPUT_SIZE;
+
+    #[rustfmt::skip]
+    const EXPECTED_MEMORY: [i32; 32] = [
+        1, 3, 6, 10, 15, 21, 28, 36,
+        45, 55, 66, 78, 91, 105, 120, 136,
+        152, 168, 184, 200, 216, 232, 248, 264,
+        280, 296, 312, 328, 344, 360, 376, 392,
+    ];
 
     #[test]
     fn emu_test() {
-        for _ in 0..RUN_COUNT {
-            Emulator::run_python_emulator(SOI_CODE);
-        }
+        let result = Emulator::run_python_emulator(SOI_CODE);
+        println!("{:?}", result);
+
+        assert!(result.success);
+        assert_eq!(result.cycle_count, EXPECTED_CYCLES);
+        assert!(result.unknown);
+        assert_eq!(
+            &result.memory.as_ref().unwrap()[MEMORY_OUTPUT_ADDR..MEMORY_OUTPUT_ADDR_END],
+            &EXPECTED_MEMORY
+        );
     }
 
     #[test]
