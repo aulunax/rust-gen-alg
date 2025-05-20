@@ -6,10 +6,10 @@ use regex::Regex;
 
 #[derive(Debug)]
 pub struct EmulatorResult {
-    success: bool,
-    cycle_count: usize,
+    pub success: bool,
+    pub cycle_count: usize,
     unknown: bool,
-    memory: Option<Vec<i32>>,
+    pub memory: Option<Vec<i32>>,
 }
 
 pub struct Emulator;
@@ -19,13 +19,13 @@ impl Emulator {
         let output = Command::new("python3")
             .args(&["-B", "-u", "interface.py"])
             .args(&["--instr", code])
+            .args(&["--timeout", "15000"])
             .current_dir("src/emulator")
             .output()
             .expect("Failed to start python process");
 
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
-            println!("{}", stdout);
             Emulator::parse_emu_output(&stdout)
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -48,6 +48,15 @@ impl Emulator {
         let split_output: Vec<&str> = output.splitn(4, '\n').collect();
 
         let success = split_output.get(0) == Some(&"Completed");
+
+        if !success {
+            return EmulatorResult {
+                success: success,
+                cycle_count: 0,
+                unknown: true,
+                memory: None,
+            };
+        }
 
         let cycles: usize = split_output
             .get(1)

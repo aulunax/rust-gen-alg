@@ -9,6 +9,7 @@ use rand::{
 
 use crate::individual::{dlx, genetic::Genetic};
 
+use super::emu::Emulator;
 use super::{
     Opcode, Register,
     instruction::{self, MAX_IMMEDIATE_FOR_RAND, MAX_REGISTER_FOR_RAND},
@@ -16,11 +17,23 @@ use super::{
 
 const DLX_INDIV_MAX_SIZE: usize = 40;
 
+const SOI_ALG_START: &str = "ADDI R0, 0x00000010, R12\nADDI R0, 0x00000020, R11\nAND R1, R0, R1\nMULI R12, 0x00000004, R12\nAND R4, R0, R4\nMULI R11, 0x00000004, R11\nSUBI R12, 0x00000004, R13\nLDW R7, 0x00000200(R1)\nADD R4, R0, R5\nSUBI R13, 0x00000004, R17\nl1: AND R2, R0, R2\nAND R3, R0, R3\nSTW R7, 0x00000280(R4)\nLDW R9, 0x00000280(R5)\nLDW R10, 0x000002C0(R2)\nl2: SUB R5, R17, R14\nADD R3, R9, R3\nADDI R2, 0x00000004, R2\nBRLE R14, h1\nSUB R2, R12, R15\nADDI R5, 0x00000004, R5\nAND R5, R0, R5\nh1: MUL R3, R10, R3\nBRNZ R15, l2\nLDW R9, 0x00000280(R5)\nLDW R10, 0x000002C0(R2)\nSTW R3, 0x00000300(R1)\nSUBI R4, 0x00000004, R4\nADDI R1, 0x00000004, R1\nNOP\nBRGE R4, h2\nSUB R1, R11, R15\nNOP\nADD R13, R0, R4\nh2: NOP\nBRNZ R15, l1\nLDW R7, 0x00000200(R1)\nADD R4, R0, R5";
+
+#[derive(Clone, Debug)]
+struct Label {
+    name: String,
+    location: usize,
+}
+
 /// Individual for the DLX algorithm
 #[derive(Clone, Debug)]
 pub struct Individual {
     instructions: Vec<dlx::Instruction>,
+    labels: Vec<Label>,
 }
+
+unsafe impl Sync for Individual {}
+unsafe impl Send for Individual {}
 
 impl Individual {
     fn first_nop_index(&self) -> usize {
@@ -124,13 +137,43 @@ impl Individual {
     }
 }
 
+#[rustfmt::skip]
+const EXPECTED_MEMORY: [i32; 32] = [
+    1, 3, 6, 10, 15, 21, 28, 36,
+    45, 55, 66, 78, 91, 105, 120, 136,
+    152, 168, 184, 200, 216, 232, 248, 264,
+    280, 296, 312, 328, 344, 360, 376, 392,
+];
+
+const MEMORY_OUTPUT_ADDR: usize = 192;
+const MEMORY_OUTPUT_SIZE: usize = 32;
+const MEMORY_OUTPUT_ADDR_END: usize = MEMORY_OUTPUT_ADDR + MEMORY_OUTPUT_SIZE;
+
 impl Genetic for Individual {
     fn fitness(&self) -> f32 {
-        1.0 + self.first_nop_index() as f32
+        let result = Emulator::run_python_emulator(&self.to_string());
+
+        println!("{:?}", result);
+
+        if !result.success {
+            return 0.0;
+        }
+
+        if result.cycle_count > 10000 {
+            return 0.0;
+        }
+
+        if &result.memory.as_ref().unwrap()[MEMORY_OUTPUT_ADDR..MEMORY_OUTPUT_ADDR_END]
+            != &EXPECTED_MEMORY
+        {
+            return 1.0;
+        }
+
+        (10000 - result.cycle_count) as f32
     }
 
     fn generate() -> Self {
-        Individual::default()
+        Individual::new("NOP")
     }
 
     fn crossover(&self, other: &Self) -> Self {
@@ -152,6 +195,7 @@ impl Genetic for Individual {
 
         Individual {
             instructions: child,
+            labels: self.labels.clone(),
         }
     }
 
@@ -194,11 +238,28 @@ impl Individual {
     /// * An `Individual` containing the parsed instructions.
     pub fn parse(input: &str) -> Self {
         let mut instrs: Vec<dlx::Instruction> = vec![];
+        let mut labels: Vec<Label> = vec![];
 
         let instrs_parts: Vec<&str> = input.split_terminator("\n").collect();
 
+        println!("{:?}", instrs_parts);
+
+        let mut instr_count = 0;
         for instr in instrs_parts {
-            instrs.push(dlx::Instruction::new(instr));
+            // get label, and remove it from string
+            let labeless_instr = if instr.contains(':') {
+                let split_instr = instr.split_once(':').unwrap();
+                labels.push(Label {
+                    name: split_instr.0.trim().to_string(),
+                    location: instr_count,
+                });
+                split_instr.1
+            } else {
+                instr
+            };
+
+            instrs.push(dlx::Instruction::new(labeless_instr));
+            instr_count += 1;
         }
 
         while instrs.len() < DLX_INDIV_MAX_SIZE {
@@ -207,6 +268,7 @@ impl Individual {
 
         Individual {
             instructions: instrs,
+            labels: labels,
         }
     }
 
@@ -230,8 +292,14 @@ impl Default for Individual {
 
 impl fmt::Display for Individual {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut counter = 0;
         for instr in &self.instructions {
+            // if there is a label where, location == counter, write 'name:'
+            if let Some(label) = self.labels.iter().find(|label| label.location == counter) {
+                write!(f, "{}: ", label.name)?;
+            }
             writeln!(f, "{}", instr)?;
+            counter += 1;
         }
         Ok(())
     }
@@ -244,32 +312,32 @@ mod test {
 
     const RAW_INSTRUCTIONS: &str = r#"SUB R4, R4, R4
 SUB R1, R1, R1
-LDW R7, 0x0200(R1)
-STW R7, 0x0280(R4)
+LDW R7, 0x00000200(R1)
+STW R7, 0x00000280(R4)
 SUB R3, R3, R3
 ADD R4, R0, R5
 SUB R2, R2, R2
-LDW R8, 0x0280(R5)
-LDW R6, 0x02C0(R2)
+LDW R8, 0x00000280(R5)
+LDW R6, 0x000002C0(R2)
 MUL R8, R6, R8
 ADD R3, R8, R3
-ADDI R5, 0x0004, R5
-ADDI R0, 0x003C, R8
+ADDI R5, 0x00000004, R5
+ADDI R0, 0x0000003C, R8
 SUB R5, R8, R8
-BRLE R8, 0x2134
+BRLE R8, 0x00002134
 SUB R5, R5, R5
-ADDI R2, 0x0004, R2
-ADDI R0, 0x0040, R8
+ADDI R2, 0x00000004, R2
+ADDI R0, 0x00000040, R8
 SUB R2, R8, R8
-BRLT R8, 0x1234
-STW R3, 0x0300(R1)
-SUBI R4, 0x0004, R4
-BRGE R4, 0x3240
-ADDI R0, 0x003C, R4
-ADDI R1, 0x0004, R1
-ADDI R0, 0x0080, R8
+BRLT R8, 0x00001234
+STW R3, 0x00000300(R1)
+SUBI R4, 0x00000004, R4
+BRGE R4, 0x00003240
+ADDI R0, 0x0000003C, R4
+ADDI R1, 0x00000004, R1
+ADDI R0, 0x00000080, R8
 SUB R1, R8, R8
-BRLT R8, 0x0008"#;
+BRLT R8, 0x00000008"#;
 
     const RAW_INSTRUCTIONS_LEN: usize = 28;
 
@@ -393,5 +461,12 @@ BRLT R8, 0x0008"#;
 
         assert_eq!(indiv.first_nop_index(), DLX_INDIV_MAX_SIZE);
         assert_eq!(indiv.instructions.len(), DLX_INDIV_MAX_SIZE);
+    }
+
+    #[test]
+    fn test_dlx_instruction_labels() {
+        let indiv = Individual::new(SOI_ALG_START);
+
+        assert_eq!(indiv.to_string(), format!("{}\nNOP\nNOP\n", SOI_ALG_START));
     }
 }

@@ -1,6 +1,7 @@
 use core::panic;
 use rand::Rng;
 use rand::rngs::ThreadRng;
+use rayon::iter::split;
 use regex::Regex;
 use std::fmt;
 
@@ -15,6 +16,7 @@ pub struct Instruction {
     opcode: Opcode,
     registers: Vec<Register>,
     immidiate: i32,
+    label: Option<String>,
 }
 
 impl Instruction {
@@ -24,6 +26,10 @@ impl Instruction {
 
     pub fn get_immidiate(&self) -> i32 {
         self.immidiate
+    }
+
+    pub fn get_label(&self) -> &Option<String> {
+        &self.label
     }
 
     pub fn get_rand() -> Self {
@@ -43,6 +49,7 @@ impl Instruction {
             opcode: r_opcode,
             registers: r_regs,
             immidiate: r_imm,
+            label: None,
         }
     }
 
@@ -98,8 +105,15 @@ impl Instruction {
                 } else {
                     output_str.push(c);
                 }
-            } else if c == 'i' || c == 'j' {
-                output_str.push_str(&format!("0x{:04X}", self.immidiate));
+            } else if c == 'i' {
+                output_str.push_str(&format!("0x{:08X}", self.immidiate));
+            } else if c == 'j' {
+                // If label exists, push it; else do same as 'i'
+                if let Some(label) = &self.label {
+                    output_str.push_str(label);
+                } else {
+                    output_str.push_str(&format!("0x{:08X}", self.immidiate));
+                }
             } else {
                 output_str.push(c);
             }
@@ -112,7 +126,7 @@ impl Instruction {
     ///
     /// Assumes that operands consist of only alphanumeric characters, so any not alphanumeric characters are treated as separators.
     fn split_operands(input: &str) -> Vec<String> {
-        let re = Regex::new(r"0x[0-9a-fA-F]+|R\d+|\d+").unwrap();
+        let re = Regex::new(r"0x[0-9a-fA-F]+|R\d+|\d+|[a-zA-Z_][a-zA-Z0-9_]*").unwrap();
         re.find_iter(input)
             .map(|m| m.as_str().to_string())
             .collect()
@@ -153,6 +167,7 @@ impl Instruction {
         let mut immidiate: i32 = 0;
 
         let mut current_operand_index = 0;
+        let mut label: Option<String> = None;
 
         // Format parser
         while let Some(c) = format_chars.next() {
@@ -169,11 +184,22 @@ impl Instruction {
                         current_operand_index += 1;
                     }
                 }
-            } else if c == 'i' || c == 'j' {
+            } else if c == 'i' {
                 if current_operand_index < operands_parts.len() {
                     let cleaned_immidiate =
                         operands_parts[current_operand_index].trim_start_matches("0x");
                     immidiate = i32::from_str_radix(cleaned_immidiate, 16).unwrap();
+                }
+                current_operand_index += 1;
+            } else if c == 'j' {
+                if current_operand_index < operands_parts.len() {
+                    let operand = &operands_parts[current_operand_index];
+                    if operand.starts_with("0x") {
+                        immidiate =
+                            i32::from_str_radix(operand.trim_start_matches("0x"), 16).unwrap();
+                    } else {
+                        label = Some(operand.clone());
+                    }
                 }
                 current_operand_index += 1;
             }
@@ -199,6 +225,7 @@ impl Instruction {
             opcode: opcode,
             registers: registers,
             immidiate: immidiate,
+            label: label,
         })
     }
 
@@ -218,6 +245,7 @@ impl Default for Instruction {
             opcode: Opcode::NOP,
             registers: vec![],
             immidiate: 0,
+            label: None,
         }
     }
 }
@@ -274,30 +302,34 @@ mod test {
             opcode: Opcode::LDW,
             registers: vec![Register::R6, Register::R8],
             immidiate: 32,
+            label: None,
         };
 
         let inst_add = Instruction {
             opcode: Opcode::ADD,
             registers: vec![Register::R4, Register::R3, Register::R2],
             immidiate: 32,
+            label: None,
         };
 
         let inst_nop = Instruction {
             opcode: Opcode::NOP,
             registers: vec![],
             immidiate: 0,
+            label: None,
         };
 
         let inst_brz = Instruction {
             opcode: Opcode::BRZ,
             registers: vec![Register::R4, Register::R3],
             immidiate: 32,
+            label: None,
         };
 
-        assert_eq!(inst.to_string(), "LDW R8, 0x0020(R6)");
+        assert_eq!(inst.to_string(), "LDW R8, 0x00000020(R6)");
         assert_eq!(inst_add.to_string(), "ADD R4, R3, R2");
         assert_eq!(inst_nop.to_string(), "NOP");
-        assert_eq!(inst_brz.to_string(), "BRZ R3, 0x0020");
+        assert_eq!(inst_brz.to_string(), "BRZ R3, 0x00000020");
     }
 
     #[test]
@@ -307,9 +339,16 @@ mod test {
         let nop_inst = Instruction::new("NOP");
         let brz_inst = Instruction::new("BRZ R3, 0x0020");
 
-        assert_eq!(ldw_inst.to_string(), "LDW R8, 0x0020(R6)");
+        assert_eq!(ldw_inst.to_string(), "LDW R8, 0x00000020(R6)");
         assert_eq!(add_inst.to_string(), "ADD R4, R3, R2");
         assert_eq!(nop_inst.to_string(), "NOP");
-        assert_eq!(brz_inst.to_string(), "BRZ R3, 0x0020");
+        assert_eq!(brz_inst.to_string(), "BRZ R3, 0x00000020");
+    }
+
+    #[test]
+    fn test_instruction_label() {
+        let brz_inst = Instruction::new("BRZ R3, h1");
+
+        assert_eq!(brz_inst.to_string(), "BRZ R3, h1");
     }
 }

@@ -1,20 +1,20 @@
 use std::error::Error;
 
-use rand::{Rng, seq::IndexedRandom};
-use roulette_wheel::RouletteWheel;
-
 use crate::individual::genetic::Genetic;
+use rand::{Rng, seq::IndexedRandom};
+use rayon::prelude::*;
+use roulette_wheel::RouletteWheel;
 
 /// Individual that is put in genetic algorithm.
 ///
 /// Implements Genetic trait, which allows it to be used as proper population individual
 #[derive(Clone, Debug)]
-pub struct FitnessIndiv<T: Genetic + Clone> {
+pub struct FitnessIndiv<T: Genetic + Clone + Send + Sync> {
     obj: T,
     fitness: f32,
 }
 
-impl<T: Genetic + Clone> FitnessIndiv<T> {
+impl<T: Genetic + Clone + Send + Sync> FitnessIndiv<T> {
     /// Getter for fitness
     pub fn fitness(&self) -> f32 {
         self.fitness
@@ -38,14 +38,14 @@ impl<T: Genetic + Clone> FitnessIndiv<T> {
 }
 
 /// Genetic Algorithm struct
-pub struct GenAlg<T: Genetic + Clone> {
+pub struct GenAlg<T: Genetic + Clone + Send + Sync> {
     population_history: Vec<Vec<FitnessIndiv<T>>>,
     current_population: Vec<FitnessIndiv<T>>,
     current_generation: usize,
     best_individual: Option<FitnessIndiv<T>>,
 }
 
-impl<T: Genetic + Clone> GenAlg<T> {
+impl<T: Genetic + Clone + Send + Sync> GenAlg<T> {
     /// Updates self.best_individual to the best individual in the current population
     fn try_update_best_individual(&mut self) -> () {
         if let None = self.best_individual {
@@ -139,22 +139,33 @@ impl<T: Genetic + Clone> GenAlg<T> {
             self.current_population.truncate(selected_count);
 
             // crossover
-            while self.current_population.len() != population_size {
-                let parents = self.current_population[..selected_count]
-                    .choose_multiple(&mut rng, 2)
-                    .collect::<Vec<_>>();
+            let needed = population_size - self.current_population.len();
+            let parents_pool = &self.current_population[..selected_count];
 
-                let child = parents[0].obj.crossover(&parents[1].obj);
-                self.current_population.push(FitnessIndiv::new(&child));
-            }
+            let new_children: Vec<FitnessIndiv<T>> = (0..needed)
+                .into_par_iter()
+                .map_init(rand::rng, |rng, _| {
+                    let parents = parents_pool.choose_multiple(rng, 2).collect::<Vec<_>>();
+                    let child = parents[0].obj.crossover(&parents[1].obj);
+                    FitnessIndiv::new(&child)
+                })
+                .collect();
+
+            self.current_population.extend(new_children);
 
             // mutation, except in last generation
             if generation != num_of_generations - 1 {
-                for indiv in self.current_population.iter_mut() {
-                    if rng.random::<f32>() < mutation_rate {
-                        indiv.obj.mutate();
-                        indiv.fitness = indiv.obj.fitness();
-                    }
+                if generation != num_of_generations - 1 {
+                    self.current_population
+                        .as_mut_slice()
+                        .par_iter_mut()
+                        .for_each(|indiv| {
+                            let mut rng = rand::rng();
+                            if rng.random::<f32>() < mutation_rate {
+                                indiv.obj.mutate();
+                                indiv.fitness = indiv.obj.fitness();
+                            }
+                        });
                 }
             }
 
