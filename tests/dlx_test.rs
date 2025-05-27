@@ -7,7 +7,7 @@ const SOI_ALG_START: &str = "ADDI R0, 0x00000010, R12\nADDI R0, 0x00000020, R11\
 fn test_dlx_gen_alg() {
     let start_timer = Instant::now();
 
-    let pop_size = 100;
+    let pop_size = 40;
     let gen_num = 200;
 
     let mut gen_alg = GenAlg::<Individual>::new(
@@ -17,7 +17,9 @@ fn test_dlx_gen_alg() {
 
     let best = gen_alg.run_genetic_algorithm(gen_num, 0.5, 0.5, 5).unwrap();
 
+    println!("{}", SOI_ALG_START);
     println!("{}\n Fitness: {}", best.obj(), best.fitness());
+
     //print!("{:?}\n", gen_alg.population_history());
 
     let duration = start_timer.elapsed();
@@ -29,8 +31,8 @@ fn test_dlx_gen_alg() {
 fn test_dlx_gen_alg_long() {
     let start_timer = Instant::now();
 
-    let pop_size = 50;
-    let gen_num = 400;
+    let pop_size = 20;
+    let gen_num = 200;
 
     let mut gen_alg = GenAlg::<Individual>::new(
         pop_size,
@@ -39,6 +41,7 @@ fn test_dlx_gen_alg_long() {
 
     let best = gen_alg.run_genetic_algorithm(gen_num, 0.5, 0.5, 3).unwrap();
 
+    println!("{}", SOI_ALG_LONG);
     println!("{}\n Fitness: {}", best.obj(), best.fitness());
     //print!("{:?}\n", gen_alg.population_history());
 

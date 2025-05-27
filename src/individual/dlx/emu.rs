@@ -16,7 +16,7 @@ pub fn run_python_emulator(code: String) -> EmulatorResult {
     let output = Command::new("python3")
         .args(&["-B", "-u", "interface.py"])
         .args(&["--instr", &code])
-        .args(&["--timeout", "7000"])
+        .args(&["--timeout", "18000"])
         .current_dir("src/emulator")
         .output()
         .expect("Failed to start python process");
