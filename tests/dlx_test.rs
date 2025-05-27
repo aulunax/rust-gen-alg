@@ -43,7 +43,6 @@ fn test_dlx_gen_alg_long() {
 
     println!("{}", SOI_ALG_LONG);
     println!("{}\n Fitness: {}", best.obj(), best.fitness());
-    //print!("{:?}\n", gen_alg.population_history());
 
     let duration = start_timer.elapsed();
     println!("Time elapsed: {:?}", duration);
